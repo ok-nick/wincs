@@ -1,0 +1,11 @@
+[package]
+name = "sftp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wincs = { path = "../../" }
+widestring = "0.5.1"
+ssh2 = "0.9.3"
+thiserror = "1.0.30"
+rkyv = "0.7.30"

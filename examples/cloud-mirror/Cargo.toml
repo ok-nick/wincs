@@ -1,0 +1,11 @@
+[package]
+name = "cloud-mirror"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wincs = { path = "../../" }
+widestring = "0.5.1"
+ctrlc = "3.2.1"
+wfd = "0.1.7"
+rkyv = "0.7.30"
