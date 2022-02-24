@@ -23,6 +23,7 @@ use windows::{
     Win32::{
         Foundation::{self, GetLastError, HANDLE, PWSTR},
         Security::{self, Authorization::ConvertSidToStringSidW, GetTokenInformation, TOKEN_USER},
+        Storage::CloudFilters,
         System::Memory::LocalFree,
     },
 };
@@ -30,7 +31,7 @@ use windows::{
 use crate::root::register::RegisterOptions;
 
 // TODO: borrow all these fields
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct SyncRoot {
     provider_name: U16String,
     security_id: Option<U16String>,
@@ -38,20 +39,23 @@ pub struct SyncRoot {
 }
 
 impl SyncRoot {
-    // TODO: these global functions should be moved to separate individual functions
+    // TODO: these two global functions should be moved to separate individual functions
     pub fn all() {
         // GetCurrentSyncRoots()
     }
 
     pub fn is_supported() -> core::Result<bool> {
-        // TODO: This method is only supported on certain windows versions, is it
-        // possible to check for support for before this?
+        // TODO: Check current windows version to see if it's supported before calling this
         StorageProviderSyncRootManager::IsSupported()
     }
 
-    // https://docs.microsoft.com/en-us/windows/win32/api/cfapi/ns-cfapi-cf_sync_registration
-    // fields have a max length of 255 bytes (there is a constant with the value)
     pub fn new(provider_name: U16String, account_name: U16String) -> Self {
+        assert!(
+            provider_name.len() <= CloudFilters::CF_MAX_PROVIDER_NAME_LENGTH as usize,
+            "provider name must not exceed {} characters, got {} characters",
+            CloudFilters::CF_MAX_PROVIDER_NAME_LENGTH,
+            provider_name.len()
+        );
         Self {
             provider_name,
             security_id: None,

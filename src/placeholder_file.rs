@@ -16,7 +16,7 @@ use windows::{
 
 use crate::root::set_flag;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PlaceholderFile(CF_PLACEHOLDER_CREATE_INFO);
 
 // TODO: impl From<File> for PlaceholderFile
@@ -54,8 +54,9 @@ impl<'a> PlaceholderFile {
     #[must_use]
     pub fn blob(mut self, blob: &'a [u8]) -> Self {
         assert!(
-            blob.len() <= 4096,
-            "blob size must not exceed 4KB (4096 bytes) after serialization, got {} bytes",
+            blob.len() <= CloudFilters::CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH as usize,
+            "blob size must not exceed {} bytes after serialization, got {} bytes",
+            CloudFilters::CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH,
             blob.len()
         );
         self.0.FileIdentity = blob.as_ptr() as *mut _;
@@ -103,20 +104,15 @@ impl Default for PlaceholderFile {
 }
 
 pub trait BatchCreate {
-    fn create<P: AsRef<Path>>(&self, path: P) -> core::Result<Vec<core::Result<u64>>>;
+    fn create<P: AsRef<Path>>(&mut self, path: P) -> core::Result<Vec<core::Result<u64>>>;
 }
 
 impl BatchCreate for [PlaceholderFile] {
-    fn create<P: AsRef<Path>>(&self, path: P) -> core::Result<Vec<core::Result<u64>>> {
+    fn create<P: AsRef<Path>>(&mut self, path: P) -> core::Result<Vec<core::Result<u64>>> {
         unsafe {
             CfCreatePlaceholders(
                 path.as_ref().as_os_str(),
-                // TODO: I could avoid an allocation here if I'm able to not store the U16CString
-                // in the PlaceholderFile struct
-                self.iter()
-                    .map(|placeholder| placeholder.0)
-                    .collect::<Vec<CF_PLACEHOLDER_CREATE_INFO>>()
-                    .as_mut_ptr(),
+                self.as_mut_ptr() as *mut CF_PLACEHOLDER_CREATE_INFO,
                 self.len() as u32,
                 CloudFilters::CF_CREATE_FLAG_NONE,
                 ptr::null_mut(),

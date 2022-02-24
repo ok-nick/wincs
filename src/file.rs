@@ -3,23 +3,22 @@ use std::{
     mem::{self, MaybeUninit},
     ops::{Bound, Range, RangeBounds},
     os::windows::io::AsRawHandle,
-    ptr::{self, addr_of},
-    slice,
+    ptr,
 };
 
 use widestring::U16CStr;
 use windows::{
     core,
     Win32::{
-        Foundation::{self, HANDLE},
+        Foundation::HANDLE,
         Storage::{
             CloudFilters::{
                 self, CfConvertToPlaceholder, CfDehydratePlaceholder, CfGetPlaceholderInfo,
                 CfGetPlaceholderStateFromFileInfo, CfGetSyncRootInfoByHandle, CfHydratePlaceholder,
                 CfRevertPlaceholder, CfSetPinState, CfUpdatePlaceholder, CF_CONVERT_FLAGS,
                 CF_FILE_RANGE, CF_PIN_STATE, CF_PLACEHOLDER_STANDARD_INFO, CF_PLACEHOLDER_STATE,
-                CF_SET_PIN_FLAGS, CF_SYNC_ROOT_INFO_STANDARD, CF_SYNC_ROOT_STANDARD_INFO,
-                CF_UPDATE_FLAGS,
+                CF_SET_PIN_FLAGS, CF_SYNC_PROVIDER_STATUS, CF_SYNC_ROOT_INFO_STANDARD,
+                CF_SYNC_ROOT_STANDARD_INFO, CF_UPDATE_FLAGS,
             },
             FileSystem::{self, GetFileInformationByHandleEx, FILE_ATTRIBUTE_TAG_INFO},
         },
@@ -28,7 +27,6 @@ use windows::{
 
 use crate::{
     placeholder_file::Metadata,
-    provider::ProviderStatus,
     root::{
         register::{HydrationPolicy, HydrationType, InSyncPolicy, PopulationType},
         set_flag,
@@ -63,6 +61,7 @@ pub trait FileExt: AsRawHandle {
         }
     }
 
+    // TODO: this should be split up into multiple functions
     fn update_placeholder(&self, mut options: UpdateOptions) -> core::Result<Option<u64>> {
         unsafe {
             CfUpdatePlaceholder(
@@ -283,6 +282,60 @@ impl SyncRootInfo {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub enum ProviderStatus {
+    Disconnected,
+    Idle,
+    PopulateNamespace,
+    PopulateMetadata,
+    PopulateContent,
+    SyncIncremental,
+    SyncFull,
+    ConnectivityLost,
+    ClearFlags,
+    Terminated,
+    Error,
+}
+
+impl From<CF_SYNC_PROVIDER_STATUS> for ProviderStatus {
+    fn from(status: CF_SYNC_PROVIDER_STATUS) -> Self {
+        match status {
+            CloudFilters::CF_PROVIDER_STATUS_DISCONNECTED => Self::Disconnected,
+            CloudFilters::CF_PROVIDER_STATUS_IDLE => Self::Idle,
+            CloudFilters::CF_PROVIDER_STATUS_POPULATE_NAMESPACE => Self::PopulateNamespace,
+            CloudFilters::CF_PROVIDER_STATUS_POPULATE_METADATA => Self::PopulateContent,
+            CloudFilters::CF_PROVIDER_STATUS_POPULATE_CONTENT => Self::PopulateContent,
+            CloudFilters::CF_PROVIDER_STATUS_SYNC_INCREMENTAL => Self::SyncIncremental,
+            CloudFilters::CF_PROVIDER_STATUS_SYNC_FULL => Self::SyncFull,
+            CloudFilters::CF_PROVIDER_STATUS_CONNECTIVITY_LOST => Self::ConnectivityLost,
+            CloudFilters::CF_PROVIDER_STATUS_CLEAR_FLAGS => Self::ClearFlags,
+            CloudFilters::CF_PROVIDER_STATUS_TERMINATED => Self::Terminated,
+            CloudFilters::CF_PROVIDER_STATUS_ERROR => Self::Error,
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl From<ProviderStatus> for CF_SYNC_PROVIDER_STATUS {
+    fn from(status: ProviderStatus) -> Self {
+        match status {
+            ProviderStatus::Disconnected => CloudFilters::CF_PROVIDER_STATUS_DISCONNECTED,
+            ProviderStatus::Idle => CloudFilters::CF_PROVIDER_STATUS_IDLE,
+            ProviderStatus::PopulateNamespace => {
+                CloudFilters::CF_PROVIDER_STATUS_POPULATE_NAMESPACE
+            }
+            ProviderStatus::PopulateMetadata => CloudFilters::CF_PROVIDER_STATUS_POPULATE_METADATA,
+            ProviderStatus::PopulateContent => CloudFilters::CF_PROVIDER_STATUS_POPULATE_CONTENT,
+            ProviderStatus::SyncIncremental => CloudFilters::CF_PROVIDER_STATUS_SYNC_INCREMENTAL,
+            ProviderStatus::SyncFull => CloudFilters::CF_PROVIDER_STATUS_SYNC_FULL,
+            ProviderStatus::ConnectivityLost => CloudFilters::CF_PROVIDER_STATUS_CONNECTIVITY_LOST,
+            ProviderStatus::ClearFlags => CloudFilters::CF_PROVIDER_STATUS_CLEAR_FLAGS,
+            ProviderStatus::Terminated => CloudFilters::CF_PROVIDER_STATUS_TERMINATED,
+            ProviderStatus::Error => CloudFilters::CF_PROVIDER_STATUS_ERROR,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 pub enum PinState {
     Unspecified,
     Pinned,
@@ -392,7 +445,7 @@ impl Default for ConvertOptions {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UpdateOptions<'a> {
     metadata: Option<Metadata>,
     dehydrate_range: Vec<CF_FILE_RANGE>,
@@ -408,6 +461,7 @@ impl<'a> UpdateOptions<'a> {
         self
     }
 
+    // TODO: user should be able to specify an array of RangeBounds
     #[must_use]
     pub fn dehydrate_range(mut self, range: Range<u64>) -> Self {
         self.dehydrate_range.push(CF_FILE_RANGE {
@@ -588,7 +642,11 @@ impl PlaceholderInfo {
         unsafe { &*self.info }.SyncRootFileId
     }
 
-    pub fn blob(&self) -> &[u8] {
-        &self.data[(mem::size_of::<CF_PLACEHOLDER_STANDARD_INFO>() + 1)..]
+    pub fn blob(&self) -> Option<&[u8]> {
+        let start = mem::size_of::<CF_PLACEHOLDER_STANDARD_INFO>() + 1;
+        match self.data.len() - start {
+            0 => None,
+            _ => Some(&self.data[start..]),
+        }
     }
 }

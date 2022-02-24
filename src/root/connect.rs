@@ -59,7 +59,7 @@ impl ConnectOptions {
         self
     }
 
-    pub fn connect<P, T>(self, path: P, filter: &Arc<T>) -> core::Result<Provider>
+    pub fn connect<P, T>(self, path: P, filter: T) -> core::Result<Provider<T>>
     where
         P: AsRef<Path>,
         T: SyncFilter + 'static,
@@ -67,7 +67,8 @@ impl ConnectOptions {
         // TODO: add an option for this and state how it's automatically done if under the user
         index_path(path.as_ref())?;
 
-        let result = unsafe {
+        let filter = Arc::new(filter);
+        unsafe {
             CfConnectSyncRoot(
                 path.as_ref().as_os_str(),
                 // TODO: ManuallyDrop prevents it from being destructured?
@@ -75,16 +76,15 @@ impl ConnectOptions {
                 ManuallyDrop::new(proxy::callbacks::<T>()).as_ptr(),
                 // create a weak arc so that it could be upgraded when it's being used and when the
                 // original (users) arc is dropped then the program is done
-                Weak::into_raw(Arc::downgrade(filter)) as *const _,
+                Weak::into_raw(Arc::downgrade(&filter)) as *const _,
                 // This is enabled by default to remove the Option requirement around the
                 // `path` method from the `Request` struct. To notify the shell of file
                 // transfer progress the path is required.
                 // TODO: does this mean ^ or does it just mean the path isn't relative to the sync root?
                 self.0 | CloudFilters::CF_CONNECT_FLAG_REQUIRE_FULL_FILE_PATH,
             )
-        };
-
-        result.map(|key| Provider::new(key.0))
+        }
+        .map(|key| Provider::new(key.0, filter))
     }
 }
 

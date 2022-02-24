@@ -11,7 +11,7 @@ use windows::{
     core::{self, GUID},
     Win32::{
         Storage::{
-            CloudFilters::{CfReportProviderProgress, CF_CONNECTION_KEY},
+            CloudFilters::{self, CfReportProviderProgress, CF_CONNECTION_KEY},
             EnhancedStorage,
         },
         System::{
@@ -83,7 +83,7 @@ impl Placeholder {
             metadata: None,
             blob: None,
         }
-        .execute(self.keys, None)
+        .execute(self.keys)
     }
 
     pub fn set_metadata(&self, metadata: Metadata) -> core::Result<()> {
@@ -92,13 +92,14 @@ impl Placeholder {
             metadata: Some(metadata),
             blob: None,
         }
-        .execute(self.keys, None)
+        .execute(self.keys)
     }
 
-    pub fn set_blob(mut self, blob: &[u8]) -> core::Result<()> {
+    pub fn set_blob(self, blob: &[u8]) -> core::Result<()> {
         assert!(
-            blob.len() <= 4096,
-            "blob size must not exceed 4KB (4096 bytes) after serialization, got {} bytes",
+            blob.len() <= CloudFilters::CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH as usize,
+            "blob size must not exceed {} bytes after serialization, got {} bytes",
+            CloudFilters::CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH,
             blob.len()
         );
 
@@ -107,7 +108,7 @@ impl Placeholder {
             metadata: None,
             blob: Some(blob),
         }
-        .execute(self.keys, None)
+        .execute(self.keys)
     }
 
     pub fn set_progress(&self, total: u64, completed: u64) -> core::Result<()> {
@@ -161,7 +162,7 @@ impl io::Read for Placeholder {
             buffer,
             position: self.position,
         }
-        .execute(self.keys, None);
+        .execute(self.keys);
 
         match result {
             Ok(bytes_read) => {
@@ -184,7 +185,7 @@ impl io::Write for Placeholder {
             buffer,
             position: self.position,
         }
-        .execute(self.keys, None);
+        .execute(self.keys);
 
         match result {
             Ok(_) => {

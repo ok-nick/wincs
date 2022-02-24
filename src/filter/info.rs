@@ -1,12 +1,12 @@
-use std::{ops::Range, path::PathBuf};
+use std::{fmt::Debug, ops::Range, path::PathBuf};
 
 use widestring::U16CStr;
 use windows::Win32::Storage::CloudFilters::{
-    self, CF_CALLBACK_DEHYDRATION_REASON, CF_CALLBACK_PARAMETERS_0_0, CF_CALLBACK_PARAMETERS_0_1,
-    CF_CALLBACK_PARAMETERS_0_10, CF_CALLBACK_PARAMETERS_0_11, CF_CALLBACK_PARAMETERS_0_2,
-    CF_CALLBACK_PARAMETERS_0_3, CF_CALLBACK_PARAMETERS_0_4, CF_CALLBACK_PARAMETERS_0_5,
-    CF_CALLBACK_PARAMETERS_0_6, CF_CALLBACK_PARAMETERS_0_7, CF_CALLBACK_PARAMETERS_0_8,
-    CF_CALLBACK_PARAMETERS_0_9,
+    self, CF_CALLBACK_CANCEL_FLAGS, CF_CALLBACK_DEHYDRATION_REASON, CF_CALLBACK_PARAMETERS_0_0,
+    CF_CALLBACK_PARAMETERS_0_1, CF_CALLBACK_PARAMETERS_0_10, CF_CALLBACK_PARAMETERS_0_11,
+    CF_CALLBACK_PARAMETERS_0_2, CF_CALLBACK_PARAMETERS_0_3, CF_CALLBACK_PARAMETERS_0_4,
+    CF_CALLBACK_PARAMETERS_0_5, CF_CALLBACK_PARAMETERS_0_6, CF_CALLBACK_PARAMETERS_0_7,
+    CF_CALLBACK_PARAMETERS_0_8, CF_CALLBACK_PARAMETERS_0_9,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -40,6 +40,46 @@ impl FetchData {
     }
 }
 
+#[derive(Clone, Copy)]
+pub struct CancelFetchData(pub(crate) CF_CALLBACK_PARAMETERS_0_0);
+
+impl CancelFetchData {
+    pub fn io_timeout(&self) -> bool {
+        (self.0.Flags & CloudFilters::CF_CALLBACK_CANCEL_FLAG_IO_TIMEOUT).0 != 0
+    }
+
+    pub fn io_aborted(&self) -> bool {
+        (self.0.Flags & CloudFilters::CF_CALLBACK_CANCEL_FLAG_IO_ABORTED).0 != 0
+    }
+
+    pub fn file_range(&self) -> Range<u64> {
+        let range = unsafe { self.0.Anonymous.FetchData };
+        (range.FileOffset as u64)..(range.FileOffset + range.Length) as u64
+    }
+}
+
+impl Debug for CancelFetchData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("CancelFetchData")
+            .field(unsafe {
+                &CancelFetchDataDebug {
+                    Flags: self.0.Flags,
+                    FileOffset: self.0.Anonymous.FetchData.FileOffset,
+                    Length: self.0.Anonymous.FetchData.Length,
+                }
+            })
+            .finish()
+    }
+}
+
+#[allow(dead_code, non_snake_case)]
+#[derive(Debug)]
+struct CancelFetchDataDebug {
+    Flags: CF_CALLBACK_CANCEL_FLAGS,
+    FileOffset: i64,
+    Length: i64,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct ValidateData(pub(crate) CF_CALLBACK_PARAMETERS_0_11);
 
@@ -54,28 +94,7 @@ impl ValidateData {
     }
 }
 
-// TODO: Does this take this parameter?
-#[derive(Clone, Copy)]
-pub struct Cancel(pub(crate) CF_CALLBACK_PARAMETERS_0_0);
-
-impl Cancel {
-    pub fn io_timeout(&self) -> bool {
-        (self.0.Flags & CloudFilters::CF_CALLBACK_CANCEL_FLAG_IO_TIMEOUT).0 != 0
-    }
-
-    pub fn io_aborted(&self) -> bool {
-        (self.0.Flags & CloudFilters::CF_CALLBACK_CANCEL_FLAG_IO_ABORTED).0 != 0
-    }
-
-    pub fn file_range(&self) -> Range<u64> {
-        unsafe {
-            (self.0.Anonymous.FetchData.FileOffset as u64)
-                ..(self.0.Anonymous.FetchData.FileOffset + self.0.Anonymous.FetchData.Length) as u64
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub struct FetchPlaceholders(pub(crate) CF_CALLBACK_PARAMETERS_0_7);
 
 impl FetchPlaceholders {
@@ -89,6 +108,35 @@ impl FetchPlaceholders {
     pub fn pattern(&self) -> &U16CStr {
         unsafe { U16CStr::from_ptr_str(self.0.Pattern.0) }
     }
+}
+
+#[derive(Clone, Copy)]
+pub struct CancelFetchPlaceholders(pub(crate) CF_CALLBACK_PARAMETERS_0_0);
+
+impl CancelFetchPlaceholders {
+    pub fn io_timeout(&self) -> bool {
+        (self.0.Flags & CloudFilters::CF_CALLBACK_CANCEL_FLAG_IO_TIMEOUT).0 != 0
+    }
+
+    pub fn io_aborted(&self) -> bool {
+        (self.0.Flags & CloudFilters::CF_CALLBACK_CANCEL_FLAG_IO_ABORTED).0 != 0
+    }
+}
+
+impl Debug for CancelFetchPlaceholders {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("CancelFetchPlaceholders")
+            .field(&CancelFetchPlaceholdersDebug {
+                Flags: self.0.Flags,
+            })
+            .finish()
+    }
+}
+
+#[allow(dead_code, non_snake_case)]
+#[derive(Debug)]
+struct CancelFetchPlaceholdersDebug {
+    Flags: CF_CALLBACK_CANCEL_FLAGS,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -160,7 +208,7 @@ impl Delete {
 #[derive(Debug, Clone, Copy)]
 pub struct Deleted(pub(crate) CF_CALLBACK_PARAMETERS_0_4);
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub struct Rename(pub(crate) CF_CALLBACK_PARAMETERS_0_10);
 
 impl Rename {
@@ -176,7 +224,6 @@ impl Rename {
         (self.0.Flags & CloudFilters::CF_CALLBACK_RENAME_FLAG_TARGET_IN_SCOPE).0 != 0
     }
 
-    // TODO: all I could really do here is cache the value, I'd need to do the same for below, source_path
     pub fn target_path(&self) -> PathBuf {
         unsafe {
             U16CStr::from_ptr_str(self.0.TargetPath.0)
@@ -186,7 +233,7 @@ impl Rename {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub struct Renamed(pub(crate) CF_CALLBACK_PARAMETERS_0_9);
 
 impl Renamed {

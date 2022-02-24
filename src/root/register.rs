@@ -56,7 +56,7 @@ impl<'a> RegisterOptions<'a> {
         self
     }
 
-    // TODO: note that this defaults to the provider_name
+    // I made this default to the provider_name
     #[must_use]
     pub fn display_name(mut self, display_name: U16String) -> Self {
         self.display_name = Some(display_name);
@@ -81,10 +81,14 @@ impl<'a> RegisterOptions<'a> {
         self
     }
 
-    // https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Storage/CloudFilters/constant.CF_MAX_PROVIDER_VERSION_LENGTH.html
-    // max length of 255 bytes
     #[must_use]
     pub fn version(mut self, version: U16String) -> Self {
+        assert!(
+            version.len() <= CloudFilters::CF_MAX_PROVIDER_VERSION_LENGTH as usize,
+            "version length must not exceed {} characters, got {} characters",
+            CloudFilters::CF_MAX_PROVIDER_VERSION_LENGTH,
+            version.len()
+        );
         self.version = Some(version);
         self
     }

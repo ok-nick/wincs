@@ -1,16 +1,16 @@
 #![allow(clippy::forget_copy)]
 
-pub mod source;
 pub mod thumbnails;
 
-use std::{
-    cmp, ptr,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+// move this
+pub enum SourceStatus {
+    FileNotFound,
+    NoSyncRoot,
+}
 
-use windows::{core::RuntimeType, Foundation::Collections::IIterator};
+// use windows::{core::RuntimeType, Foundation::Collections::IIterator};
 
-use windows as Windows;
+// use windows as Windows;
 
 //
 

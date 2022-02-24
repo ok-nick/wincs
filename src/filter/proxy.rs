@@ -7,7 +7,7 @@ use windows::Win32::Storage::CloudFilters::{
 };
 
 use crate::{
-    filter::{info, ticket, CallbackType, SyncFilter},
+    filter::{info, ticket, SyncFilter},
     request::Request,
 };
 
@@ -82,10 +82,16 @@ pub unsafe extern "system" fn fetch_data<T: SyncFilter + 'static>(
     params: *const CF_CALLBACK_PARAMETERS,
 ) {
     if let Some(filter) = filter_from_info::<T>(info) {
-        filter.fetch_data(
-            Request::new(*info, CallbackType::FetchData),
+        let request = Request::new(*info);
+        let keys = request.keys();
+        let ticket = ticket::FetchData(keys);
+        if let Err(error_kind) = filter.fetch_data(
+            request,
+            ticket,
             info::FetchData((*params).Anonymous.FetchData),
-        );
+        ) {
+            ticket.fail(error_kind);
+        }
     }
 }
 
@@ -93,14 +99,17 @@ pub unsafe extern "system" fn validate_data<T: SyncFilter + 'static>(
     info: *const CF_CALLBACK_INFO,
     params: *const CF_CALLBACK_PARAMETERS,
 ) {
-    let request = Request::new(*info, CallbackType::ValidateData);
     if let Some(filter) = filter_from_info::<T>(info) {
+        let request = Request::new(*info);
         let keys = request.keys();
-        filter.validate_data(
+        let ticket = ticket::ValidateData(keys);
+        if let Err(error_kind) = filter.validate_data(
             request,
-            ticket::ValidateData(keys),
+            ticket,
             info::ValidateData((*params).Anonymous.ValidateData),
-        );
+        ) {
+            ticket.fail(error_kind);
+        }
     }
 }
 
@@ -109,9 +118,9 @@ pub unsafe extern "system" fn cancel_fetch_data<T: SyncFilter + 'static>(
     params: *const CF_CALLBACK_PARAMETERS,
 ) {
     if let Some(filter) = filter_from_info::<T>(info) {
-        filter.cancel_fetch_placeholders(
-            Request::new(*info, CallbackType::FetchData),
-            info::Cancel((*params).Anonymous.Cancel),
+        filter.cancel_fetch_data(
+            Request::new(*info),
+            info::CancelFetchData((*params).Anonymous.Cancel),
         );
     }
 }
@@ -121,10 +130,16 @@ pub unsafe extern "system" fn fetch_placeholders<T: SyncFilter + 'static>(
     params: *const CF_CALLBACK_PARAMETERS,
 ) {
     if let Some(filter) = filter_from_info::<T>(info) {
-        filter.fetch_placeholders(
-            Request::new(*info, CallbackType::FetchPlaceholders),
+        let request = Request::new(*info);
+        let keys = request.keys();
+        let ticket = ticket::FetchPlaceholders(keys);
+        if let Err(error_kind) = filter.fetch_placeholders(
+            request,
+            ticket,
             info::FetchPlaceholders((*params).Anonymous.FetchPlaceholders),
-        );
+        ) {
+            ticket.fail(error_kind);
+        }
     }
 }
 
@@ -134,8 +149,8 @@ pub unsafe extern "system" fn cancel_fetch_placeholders<T: SyncFilter + 'static>
 ) {
     if let Some(filter) = filter_from_info::<T>(info) {
         filter.cancel_fetch_placeholders(
-            Request::new(*info, CallbackType::CancelFetchPlaceholders),
-            info::Cancel((*params).Anonymous.Cancel),
+            Request::new(*info),
+            info::CancelFetchPlaceholders((*params).Anonymous.Cancel),
         );
     }
 }
@@ -146,7 +161,7 @@ pub unsafe extern "system" fn notify_file_open_completion<T: SyncFilter + 'stati
 ) {
     if let Some(filter) = filter_from_info::<T>(info) {
         filter.opened(
-            Request::new(*info, CallbackType::Opened),
+            Request::new(*info),
             info::Opened((*params).Anonymous.OpenCompletion),
         );
     }
@@ -158,7 +173,7 @@ pub unsafe extern "system" fn notify_file_close_completion<T: SyncFilter + 'stat
 ) {
     if let Some(filter) = filter_from_info::<T>(info) {
         filter.closed(
-            Request::new(*info, CallbackType::Closed),
+            Request::new(*info),
             info::Closed((*params).Anonymous.CloseCompletion),
         );
     }
@@ -168,14 +183,17 @@ pub unsafe extern "system" fn notify_dehydrate<T: SyncFilter + 'static>(
     info: *const CF_CALLBACK_INFO,
     params: *const CF_CALLBACK_PARAMETERS,
 ) {
-    let request = Request::new(*info, CallbackType::Rename);
     if let Some(filter) = filter_from_info::<T>(info) {
+        let request = Request::new(*info);
         let keys = request.keys();
-        filter.dehydrate(
+        let ticket = ticket::Dehydrate(keys);
+        if let Err(error_kind) = filter.dehydrate(
             request,
-            ticket::Dehydrate(keys),
+            ticket,
             info::Dehydrate((*params).Anonymous.Dehydrate),
-        );
+        ) {
+            ticket.fail(error_kind);
+        }
     }
 }
 
@@ -185,7 +203,7 @@ pub unsafe extern "system" fn notify_dehydrate_completion<T: SyncFilter + 'stati
 ) {
     if let Some(filter) = filter_from_info::<T>(info) {
         filter.dehydrated(
-            Request::new(*info, CallbackType::Dehydrate),
+            Request::new(*info),
             info::Dehydrated((*params).Anonymous.DehydrateCompletion),
         );
     }
@@ -195,14 +213,15 @@ pub unsafe extern "system" fn notify_delete<T: SyncFilter + 'static>(
     info: *const CF_CALLBACK_INFO,
     params: *const CF_CALLBACK_PARAMETERS,
 ) {
-    let request = Request::new(*info, CallbackType::Delete);
     if let Some(filter) = filter_from_info::<T>(info) {
+        let request = Request::new(*info);
         let keys = request.keys();
-        filter.delete(
-            request,
-            ticket::Delete(keys),
-            info::Delete((*params).Anonymous.Delete),
-        );
+        let ticket = ticket::Delete(keys);
+        if let Err(error_kind) =
+            filter.delete(request, ticket, info::Delete((*params).Anonymous.Delete))
+        {
+            ticket.fail(error_kind);
+        }
     }
 }
 
@@ -212,7 +231,7 @@ pub unsafe extern "system" fn notify_delete_completion<T: SyncFilter + 'static>(
 ) {
     if let Some(filter) = filter_from_info::<T>(info) {
         filter.deleted(
-            Request::new(*info, CallbackType::Deleted),
+            Request::new(*info),
             info::Deleted((*params).Anonymous.DeleteCompletion),
         );
     }
@@ -222,14 +241,15 @@ pub unsafe extern "system" fn notify_rename<T: SyncFilter + 'static>(
     info: *const CF_CALLBACK_INFO,
     params: *const CF_CALLBACK_PARAMETERS,
 ) {
-    let request = Request::new(*info, CallbackType::Rename);
     if let Some(filter) = filter_from_info::<T>(info) {
+        let request = Request::new(*info);
         let keys = request.keys();
-        filter.rename(
-            request,
-            ticket::Rename(keys),
-            info::Rename((*params).Anonymous.Rename),
-        );
+        let ticket = ticket::Rename(keys);
+        if let Err(error_kind) =
+            filter.rename(request, ticket, info::Rename((*params).Anonymous.Rename))
+        {
+            ticket.fail(error_kind);
+        }
     }
 }
 
@@ -239,7 +259,7 @@ pub unsafe extern "system" fn notify_rename_completion<T: SyncFilter + 'static>(
 ) {
     if let Some(filter) = filter_from_info::<T>(info) {
         filter.renamed(
-            Request::new(*info, CallbackType::Renamed),
+            Request::new(*info),
             info::Renamed((*params).Anonymous.RenameCompletion),
         );
     }
