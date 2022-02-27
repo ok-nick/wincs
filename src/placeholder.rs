@@ -1,8 +1,8 @@
 use std::{
+    fs::File,
     io::{self, Seek, SeekFrom},
     mem::ManuallyDrop,
-    os::windows::prelude::AsRawHandle,
-    path::PathBuf,
+    path::{Path, PathBuf},
     ptr,
 };
 
@@ -11,7 +11,7 @@ use windows::{
     core::{self, GUID},
     Win32::{
         Storage::{
-            CloudFilters::{self, CfReportProviderProgress, CF_CONNECTION_KEY},
+            CloudFilters::{self, CfGetTransferKey, CfReportProviderProgress, CF_CONNECTION_KEY},
             EnhancedStorage,
         },
         System::{
@@ -32,8 +32,8 @@ use windows::{
 
 use crate::{
     command::{commands::Read, Command, Update, Write},
+    key::{BorrowedConnectionKey, BorrowedTransferKey, OwnedTransferKey},
     placeholder_file::Metadata,
-    request::Keys,
 };
 
 // secret PKEY
@@ -48,18 +48,26 @@ const STORAGE_PROVIDER_TRANSFER_PROGRESS: PROPERTYKEY = PROPERTYKEY {
 };
 
 #[derive(Debug, Clone)]
-pub struct Placeholder {
-    keys: Keys,
+pub struct Placeholder<'a> {
+    connection_key: &'a BorrowedConnectionKey,
+    transfer_key: &'a BorrowedTransferKey,
+    // TODO: take in a borrowed path
     path: PathBuf,
-    // TODO: File size should update when writing past the end of a file
+    // TODO: how does file size behave when writing past the last recorded file size?
     file_size: u64,
     position: u64,
 }
 
-impl Placeholder {
-    pub(crate) fn new(keys: Keys, path: PathBuf, file_size: u64) -> Self {
+impl<'a> Placeholder<'a> {
+    pub(crate) fn new(
+        connection_key: &'a BorrowedConnectionKey,
+        transfer_key: &'a BorrowedTransferKey,
+        path: PathBuf,
+        file_size: u64,
+    ) -> Self {
         Self {
-            keys,
+            connection_key,
+            transfer_key,
             path,
             file_size,
             position: 0,
@@ -70,52 +78,40 @@ impl Placeholder {
     // CfGetTransferKey
     // according to this post it looks optional
     // https://stackoverflow.com/questions/66988096/windows-10-file-cloud-sync-provider-api-transferdata-problem
-    pub fn from_file<T: AsRawHandle>(file: T) -> Self {
+    pub fn from_file(connection_key: &'a BorrowedConnectionKey, file: File) -> core::Result<Self> {
+        // let key = unsafe { CfGetTransferKey(HANDLE(file.as_raw_handle() as isize))?};
+        // OwnedTransferKey::new(key, file)
+
+        // Ok(Self {
+        //     connection_key,
+
+        // })
         todo!()
     }
 
-    // TODO: getters
+    pub fn update(&self, options: UpdateOptions) -> core::Result<()> {
+        options
+            .0
+            .execute(*self.connection_key.key(), *self.transfer_key.key())
+    }
 
-    // TODO: add a single function w/ an options/builder struct for all three funcs below
     pub fn mark_in_sync(&self) -> core::Result<()> {
-        Update {
-            mark_in_sync: true,
-            metadata: None,
-            blob: None,
-        }
-        .execute(self.keys)
+        self.update(UpdateOptions::new().mark_in_sync(true))
     }
 
     pub fn set_metadata(&self, metadata: Metadata) -> core::Result<()> {
-        Update {
-            mark_in_sync: false,
-            metadata: Some(metadata),
-            blob: None,
-        }
-        .execute(self.keys)
+        self.update(UpdateOptions::new().metadata(metadata))
     }
 
     pub fn set_blob(self, blob: &[u8]) -> core::Result<()> {
-        assert!(
-            blob.len() <= CloudFilters::CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH as usize,
-            "blob size must not exceed {} bytes after serialization, got {} bytes",
-            CloudFilters::CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH,
-            blob.len()
-        );
-
-        Update {
-            mark_in_sync: false,
-            metadata: None,
-            blob: Some(blob),
-        }
-        .execute(self.keys)
+        self.update(UpdateOptions::new().blob(blob))
     }
 
     pub fn set_progress(&self, total: u64, completed: u64) -> core::Result<()> {
         unsafe {
             CfReportProviderProgress(
-                CF_CONNECTION_KEY(self.keys.connection_key),
-                self.keys.transfer_key,
+                CF_CONNECTION_KEY(*self.connection_key.key()),
+                *self.transfer_key.key(),
                 total as i64,
                 completed as i64,
             )?;
@@ -155,14 +151,14 @@ impl Placeholder {
     }
 }
 
-// TODO: does this have the same 4kb requirement as writing?
-impl io::Read for Placeholder {
+// TODO: does this have the same 4KiB requirement as writing?
+impl io::Read for Placeholder<'_> {
     fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
         let result = Read {
             buffer,
             position: self.position,
         }
-        .execute(self.keys);
+        .execute(*self.connection_key.key(), *self.transfer_key.key());
 
         match result {
             Ok(bytes_read) => {
@@ -174,18 +170,18 @@ impl io::Read for Placeholder {
     }
 }
 
-impl io::Write for Placeholder {
+impl io::Write for Placeholder<'_> {
     fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
         assert!(
             buffer.len() % 4096 == 0 || self.position + buffer.len() as u64 >= self.file_size,
-            "the length of the buffer must be 4kb aligned or ending on the logical file size"
+            "the length of the buffer must be 4KiB aligned or ending on the logical file size"
         );
 
         let result = Write {
             buffer,
             position: self.position,
         }
-        .execute(self.keys);
+        .execute(*self.connection_key.key(), *self.transfer_key.key());
 
         match result {
             Ok(_) => {
@@ -202,7 +198,7 @@ impl io::Write for Placeholder {
 }
 
 // TODO: properly handle seeking
-impl Seek for Placeholder {
+impl Seek for Placeholder<'_> {
     fn seek(&mut self, position: SeekFrom) -> io::Result<u64> {
         self.position = match position {
             SeekFrom::Start(offset) => offset,
@@ -211,6 +207,36 @@ impl Seek for Placeholder {
         };
 
         Ok(self.position)
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct UpdateOptions<'a>(Update<'a>);
+
+impl<'a> UpdateOptions<'a> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn mark_in_sync(mut self, yes: bool) -> Self {
+        self.0.mark_in_sync = yes;
+        self
+    }
+
+    pub fn metadata(mut self, metadata: Metadata) -> Self {
+        self.0.metadata = Some(metadata);
+        self
+    }
+
+    pub fn blob(mut self, blob: &'a [u8]) -> Self {
+        assert!(
+            blob.len() <= CloudFilters::CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH as usize,
+            "blob size must not exceed {} byes, got {} bytes",
+            CloudFilters::CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH,
+            blob.len()
+        );
+        self.0.blob = Some(blob);
+        self
     }
 }
 

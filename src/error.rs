@@ -1,6 +1,5 @@
 use windows::Win32::Foundation::{self, NTSTATUS};
 
-// TODO: implement ToString
 #[derive(Debug, Clone, Copy)]
 pub enum CloudErrorKind {
     AccessDenied,

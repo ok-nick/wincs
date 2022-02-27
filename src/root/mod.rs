@@ -1,16 +1,11 @@
 pub mod connect;
 pub mod register;
 
-use std::{
-    mem::MaybeUninit,
-    ops::{BitAndAssign, BitOrAssign, Not},
-    path::{Path, PathBuf},
-    ptr,
-};
+use std::{mem::MaybeUninit, path::Path, ptr};
 
 use widestring::{U16CStr, U16Str, U16String};
 use windows::{
-    core::{self, HSTRING},
+    core::{self, PWSTR},
     Foundation::Uri,
     Storage::{
         Provider::{
@@ -21,14 +16,16 @@ use windows::{
         Streams::DataWriter,
     },
     Win32::{
-        Foundation::{self, GetLastError, HANDLE, PWSTR},
+        Foundation::{self, GetLastError, HANDLE},
         Security::{self, Authorization::ConvertSidToStringSidW, GetTokenInformation, TOKEN_USER},
         Storage::CloudFilters,
         System::Memory::LocalFree,
     },
 };
 
-use crate::root::register::RegisterOptions;
+use crate::{
+    ext::path::info_from_path, root::register::RegisterOptions, utility::hstring_from_widestring,
+};
 
 // TODO: borrow all these fields
 #[derive(Debug, Clone)]
@@ -39,16 +36,6 @@ pub struct SyncRoot {
 }
 
 impl SyncRoot {
-    // TODO: these two global functions should be moved to separate individual functions
-    pub fn all() {
-        // GetCurrentSyncRoots()
-    }
-
-    pub fn is_supported() -> core::Result<bool> {
-        // TODO: Check current windows version to see if it's supported before calling this
-        StorageProviderSyncRootManager::IsSupported()
-    }
-
     pub fn new(provider_name: U16String, account_name: U16String) -> Self {
         assert!(
             provider_name.len() <= CloudFilters::CF_MAX_PROVIDER_NAME_LENGTH as usize,
@@ -72,6 +59,9 @@ impl SyncRoot {
         Ok(Self::new(id[0].into(), id[2].into()))
     }
 
+    // https://docs.microsoft.com/en-us/windows/win32/shell/integrate-cloud-storage#step-3-add-your-extension-to-the-navigation-pane-and-make-it-visible
+    // TODO: if this isn't specified, is not not tied to a user?
+    // is an account name not required either?
     #[must_use]
     pub fn user_security_id(mut self, security_id: U16String) -> Self {
         self.security_id = Some(security_id);
@@ -123,15 +113,9 @@ impl SyncRoot {
         } else {
             StorageProviderHardlinkPolicy::None
         })?;
-        // TODO: Avoid allocating a security id unless if `options.security_id` is `None`
-        let security_id = SecurityId::current()?;
         info.SetId(hstring_from_widestring(&sync_root_id(
             &self.provider_name,
-            match &self.security_id {
-                Some(security_id) => security_id,
-                None => security_id.0.as_ustr(),
-                // None => SecurityId::current()?.0.as_ustr(),
-            },
+            self.get_or_fetch_security_id()?,
             &self.account_name,
         )))?;
 
@@ -141,8 +125,8 @@ impl SyncRoot {
         if let Some(version) = &options.version {
             info.SetVersion(hstring_from_widestring(version))?;
         }
-        if let Some(icon_path) = &options.icon_path {
-            info.SetIconResource(hstring_from_widestring(icon_path))?;
+        if let Some(icon) = &options.icon {
+            info.SetIconResource(hstring_from_widestring(icon))?;
         }
         if let Some(uri) = &options.recycle_bin_uri {
             info.SetRecycleBinUri(Uri::CreateUri(hstring_from_widestring(uri))?)?;
@@ -158,39 +142,52 @@ impl SyncRoot {
     }
 
     pub fn unregister(&self) -> core::Result<()> {
-        // TODO: Avoid allocating a security id unless if `self.security_id` is `None`
-        let security_id = SecurityId::current()?;
         StorageProviderSyncRootManager::Unregister(hstring_from_widestring(&sync_root_id(
             &self.provider_name,
-            match &self.security_id {
-                Some(security_id) => security_id,
-                None => security_id.0.as_ustr(),
-            },
+            self.get_or_fetch_security_id()?,
             &self.account_name,
         )))
     }
-}
 
-pub trait PathExt {
-    // TODO: if `sync_root_info` doesn't error then this is true
-    fn is_registered(&self) -> bool {
-        todo!()
-    }
-
-    // TODO: uses `info_from_path`. This call requires a struct to be made for getters of StorageProviderSyncRootInfo
-    fn sync_root_info(&self) {
-        todo!()
+    fn get_or_fetch_security_id(&self) -> core::Result<&U16Str> {
+        match &self.security_id {
+            Some(security_id) => Ok(security_id),
+            None => SecurityId::current().map(|id| id.0.as_ustr()),
+        }
     }
 }
 
-impl PathExt for PathBuf {}
-impl PathExt for Path {}
+pub fn active_roots() {
+    // GetCurrentSyncRoots()
+    todo!()
+}
+
+pub fn is_supported() -> core::Result<bool> {
+    // TODO: Check current windows version to see if this function is supported before calling it
+    StorageProviderSyncRootManager::IsSupported()
+}
+
+pub fn sync_root_id(
+    provider_name: &U16Str,
+    security_id: &U16Str,
+    account_name: &U16Str,
+) -> U16String {
+    let mut id = U16String::with_capacity(
+        provider_name.len() + 1 + security_id.len() + 1 + account_name.len(),
+    );
+    id.push(provider_name);
+    id.push_char('!');
+    id.push(security_id);
+    id.push_char('!');
+    id.push(account_name);
+    id
+}
 
 #[derive(Debug, Clone)]
-pub struct SecurityId(pub(crate) &'static U16CStr);
+pub struct SecurityId(&'static U16CStr);
 
 impl SecurityId {
-    // Equivalent to the return of `GetCurrentThreadEffectiveToken`
+    // https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getcurrentthreadeffectivetoken
     const CURRENT_THREAD_EFFECTIVE_TOKEN: HANDLE = HANDLE(-6);
 
     pub fn current() -> core::Result<Self> {
@@ -220,7 +217,7 @@ impl SecurityId {
 
             let token = token.assume_init();
             let mut sid = PWSTR(ptr::null_mut());
-            ConvertSidToStringSidW(token.User.Sid, &mut sid).ok()?;
+            ConvertSidToStringSidW(token.User.Sid, &mut sid as *mut _).ok()?;
 
             Ok(Self(U16CStr::from_ptr_str(sid.0)))
         }
@@ -232,47 +229,5 @@ impl Drop for SecurityId {
         unsafe {
             LocalFree(self.0.as_ptr() as isize);
         }
-    }
-}
-
-pub fn sync_root_id(
-    provider_name: &U16Str,
-    security_id: &U16Str,
-    account_name: &U16Str,
-) -> U16String {
-    let mut id = U16String::with_capacity(
-        provider_name.len() + 1 + security_id.len() + 1 + account_name.len(),
-    );
-    id.push(provider_name);
-    id.push_char('!');
-    id.push(security_id);
-    id.push_char('!');
-    id.push(account_name);
-    id
-}
-
-pub fn info_from_path(path: &Path) -> core::Result<StorageProviderSyncRootInfo> {
-    StorageProviderSyncRootManager::GetSyncRootInformationForFolder(
-        StorageFolder::GetFolderFromPathAsync(hstring_from_widestring(&U16String::from_os_str(
-            path.as_os_str(),
-        )))?
-        .get()?,
-    )
-}
-
-// TODO: Move this somewhere more global
-pub fn hstring_from_widestring<T: AsRef<[u16]>>(bytes: T) -> HSTRING {
-    HSTRING::from_wide(bytes.as_ref())
-}
-
-// same here
-pub fn set_flag<T>(flags: &mut T, flag: T, yes: bool)
-where
-    T: BitOrAssign + BitAndAssign + Not<Output = T>,
-{
-    if yes {
-        *flags |= flag;
-    } else {
-        *flags &= !flag;
     }
 }

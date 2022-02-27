@@ -83,11 +83,10 @@ pub unsafe extern "system" fn fetch_data<T: SyncFilter + 'static>(
 ) {
     if let Some(filter) = filter_from_info::<T>(info) {
         let request = Request::new(*info);
-        let keys = request.keys();
-        let ticket = ticket::FetchData(keys);
+        let ticket = ticket::FetchData::new(request.connection_key(), request.transfer_key());
         if let Err(error_kind) = filter.fetch_data(
-            request,
-            ticket,
+            &request,
+            &ticket,
             info::FetchData((*params).Anonymous.FetchData),
         ) {
             ticket.fail(error_kind);
@@ -101,11 +100,11 @@ pub unsafe extern "system" fn validate_data<T: SyncFilter + 'static>(
 ) {
     if let Some(filter) = filter_from_info::<T>(info) {
         let request = Request::new(*info);
-        let keys = request.keys();
-        let ticket = ticket::ValidateData(keys);
+
+        let ticket = ticket::ValidateData::new(request.connection_key(), request.transfer_key());
         if let Err(error_kind) = filter.validate_data(
-            request,
-            ticket,
+            &request,
+            &ticket,
             info::ValidateData((*params).Anonymous.ValidateData),
         ) {
             ticket.fail(error_kind);
@@ -131,11 +130,12 @@ pub unsafe extern "system" fn fetch_placeholders<T: SyncFilter + 'static>(
 ) {
     if let Some(filter) = filter_from_info::<T>(info) {
         let request = Request::new(*info);
-        let keys = request.keys();
-        let ticket = ticket::FetchPlaceholders(keys);
+
+        let ticket =
+            ticket::FetchPlaceholders::new(request.connection_key(), request.transfer_key());
         if let Err(error_kind) = filter.fetch_placeholders(
-            request,
-            ticket,
+            &request,
+            &ticket,
             info::FetchPlaceholders((*params).Anonymous.FetchPlaceholders),
         ) {
             ticket.fail(error_kind);
@@ -185,11 +185,11 @@ pub unsafe extern "system" fn notify_dehydrate<T: SyncFilter + 'static>(
 ) {
     if let Some(filter) = filter_from_info::<T>(info) {
         let request = Request::new(*info);
-        let keys = request.keys();
-        let ticket = ticket::Dehydrate(keys);
+
+        let ticket = ticket::Dehydrate::new(request.connection_key(), request.transfer_key());
         if let Err(error_kind) = filter.dehydrate(
-            request,
-            ticket,
+            &request,
+            &ticket,
             info::Dehydrate((*params).Anonymous.Dehydrate),
         ) {
             ticket.fail(error_kind);
@@ -215,10 +215,10 @@ pub unsafe extern "system" fn notify_delete<T: SyncFilter + 'static>(
 ) {
     if let Some(filter) = filter_from_info::<T>(info) {
         let request = Request::new(*info);
-        let keys = request.keys();
-        let ticket = ticket::Delete(keys);
+
+        let ticket = ticket::Delete::new(request.connection_key(), request.transfer_key());
         if let Err(error_kind) =
-            filter.delete(request, ticket, info::Delete((*params).Anonymous.Delete))
+            filter.delete(&request, &ticket, info::Delete((*params).Anonymous.Delete))
         {
             ticket.fail(error_kind);
         }
@@ -243,10 +243,10 @@ pub unsafe extern "system" fn notify_rename<T: SyncFilter + 'static>(
 ) {
     if let Some(filter) = filter_from_info::<T>(info) {
         let request = Request::new(*info);
-        let keys = request.keys();
-        let ticket = ticket::Rename(keys);
+
+        let ticket = ticket::Rename::new(request.connection_key(), request.transfer_key());
         if let Err(error_kind) =
-            filter.rename(request, ticket, info::Rename((*params).Anonymous.Rename))
+            filter.rename(&request, &ticket, info::Rename((*params).Anonymous.Rename))
         {
             ticket.fail(error_kind);
         }
@@ -281,9 +281,11 @@ unsafe fn filter_from_info<T: SyncFilter + 'static>(
         }
         // if the memory is freed then the filter is disconnected
         None => {
-            // TODO: could a callback be called while the filter is being disconnected?
-            // deallocate the weak pointer
-            drop(weak);
+            // TODO: the weak arc should be freed on disconnect making this scenario
+            // relatively impossible. Although, if I free the weak arc and by some chance
+            // a callback is called, then it could be reading memory from a dangling pointer.
+            // I could either introduce some mega hack to free the memory after x seconds or
+            // suffer from a few bytes of memory leak..
             None
         }
     }

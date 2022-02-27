@@ -13,7 +13,7 @@ use windows::{
     },
 };
 
-use crate::root::set_flag;
+use crate::utility::set_flag;
 
 #[derive(Debug, Clone)]
 pub struct RegisterOptions<'a> {
@@ -29,7 +29,7 @@ pub struct RegisterOptions<'a> {
     pub(crate) protection_mode: ProtectionMode,
     pub(crate) provider_id: Option<GUID>,
     pub(crate) in_sync_policy: InSyncPolicy,
-    pub(crate) icon_path: Option<U16String>,
+    pub(crate) icon: Option<U16String>,
     pub(crate) blob: Option<&'a [u8]>,
 }
 
@@ -111,11 +111,11 @@ impl<'a> RegisterOptions<'a> {
         self
     }
 
-    // TODO: This is a bundled resource path, so like "C:\\blah\\boo.exe,0"
-    // Maybe instead I should take parameters, "path, index," something like that
+    // https://docs.microsoft.com/en-us/windows/win32/menurc/icon-resource
     #[must_use]
-    pub fn icon_path(mut self, icon_path: U16String) -> Self {
-        self.icon_path = Some(icon_path);
+    pub fn icon(mut self, mut path: U16String, index: u16) -> Self {
+        path.push_str(format!(",{index}"));
+        self.icon = Some(path);
         self
     }
 
@@ -123,7 +123,7 @@ impl<'a> RegisterOptions<'a> {
     pub fn blob(mut self, blob: &'a [u8]) -> Self {
         assert!(
             blob.len() <= 65536,
-            "blob size must not exceed 64KB (65536 bytes) after serialization, got {} bytes",
+            "blob size must not exceed 65536 bytes, got {} bytes",
             blob.len()
         );
         self.blob = Some(blob);
@@ -146,7 +146,7 @@ impl Default for RegisterOptions<'_> {
             hydration_policy: HydrationPolicy::default(),
             population_type: PopulationType::Full,
             in_sync_policy: InSyncPolicy::default(),
-            icon_path: None,
+            icon: None,
             blob: None,
         }
     }

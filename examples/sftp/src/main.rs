@@ -19,7 +19,7 @@ use wincs::{
 // max should be 65536, this is done both in term-scp and sshfs because it's the
 // max packet size for a tcp connection
 const DOWNLOAD_CHUNK_SIZE_BYTES: usize = 4096;
-// doesn't have to be 4kb aligned
+// doesn't have to be 4KiB aligned
 const UPLOAD_CHUNK_SIZE_BYTES: usize = 4096;
 
 const CLIENT_PATH: &str = "C:\\Users\\nicky\\Music\\sftp_client";

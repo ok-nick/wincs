@@ -14,12 +14,11 @@ use windows::{
     },
 };
 
-use crate::root::set_flag;
+use crate::utility::set_flag;
 
 #[derive(Debug)]
 pub struct PlaceholderFile(CF_PLACEHOLDER_CREATE_INFO);
 
-// TODO: impl From<File> for PlaceholderFile
 impl<'a> PlaceholderFile {
     pub fn new() -> Self {
         Self::default()
@@ -55,7 +54,7 @@ impl<'a> PlaceholderFile {
     pub fn blob(mut self, blob: &'a [u8]) -> Self {
         assert!(
             blob.len() <= CloudFilters::CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH as usize,
-            "blob size must not exceed {} bytes after serialization, got {} bytes",
+            "blob size must not exceed {} bytes, got {} bytes",
             CloudFilters::CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH,
             blob.len()
         );
@@ -92,9 +91,8 @@ impl Default for PlaceholderFile {
         Self(CF_PLACEHOLDER_CREATE_INFO {
             RelativeFileName: Default::default(),
             FsMetadata: Default::default(),
-            // TODO: This one-byte array is only required for files, who knows why
-            // How is the array not dropped in this situation?
-            FileIdentity: [0u8; 1].as_mut_ptr() as *mut _,
+            FileIdentity: ptr::null_mut(),
+            // this is required only for files, who knows why
             FileIdentityLength: 1,
             Flags: CloudFilters::CF_PLACEHOLDER_CREATE_FLAG_NONE,
             Result: Foundation::S_OK,
@@ -136,6 +134,10 @@ impl BatchCreate for [PlaceholderFile] {
 pub struct Metadata(pub(crate) CF_FS_METADATA);
 
 impl Metadata {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     #[must_use]
     pub fn creation_time(mut self, time: u64) -> Self {
         self.0.BasicInfo.CreationTime = time as i64;

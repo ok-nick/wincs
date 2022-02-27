@@ -1,6 +1,5 @@
 use std::{
     ffi::OsString,
-    mem::ManuallyDrop,
     path::Path,
     sync::{Arc, Weak},
 };
@@ -8,7 +7,9 @@ use std::{
 use windows::{
     core,
     Win32::{
-        Storage::CloudFilters::{self, CfConnectSyncRoot, CF_CONNECT_FLAGS},
+        Storage::CloudFilters::{
+            self, CfConnectSyncRoot, CF_CALLBACK_REGISTRATION, CF_CONNECT_FLAGS,
+        },
         System::{
             Com::{self, CoCreateInstance},
             Search::{self, ISearchCatalogManager, ISearchManager},
@@ -18,8 +19,9 @@ use windows::{
 
 use crate::{
     filter::{proxy, SyncFilter},
-    provider::Provider,
-    root::set_flag,
+    key::OwnedConnectionKey,
+    session::Session,
+    utility::set_flag,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -59,32 +61,35 @@ impl ConnectOptions {
         self
     }
 
-    pub fn connect<P, T>(self, path: P, filter: T) -> core::Result<Provider<T>>
+    pub fn connect<P, T>(
+        self,
+        path: P,
+        filter: T,
+    ) -> core::Result<Session<([CF_CALLBACK_REGISTRATION; 14], Arc<T>)>>
     where
         P: AsRef<Path>,
         T: SyncFilter + 'static,
     {
-        // TODO: add an option for this and state how it's automatically done if under the user
+        // https://github.com/microsoft/Windows-classic-samples/blob/27ffb0811ca761741502feaefdb591aebf592193/Samples/CloudMirror/CloudMirror/Utilities.cpp#L19
         index_path(path.as_ref())?;
 
         let filter = Arc::new(filter);
+        let callbacks = proxy::callbacks::<T>();
         unsafe {
             CfConnectSyncRoot(
                 path.as_ref().as_os_str(),
-                // TODO: ManuallyDrop prevents it from being destructured?
-                // Instead store the array in the returned provider
-                ManuallyDrop::new(proxy::callbacks::<T>()).as_ptr(),
+                // I'm assuming the caller is responsible for freeing this memory and the filter's memory?
+                callbacks.as_ptr(),
                 // create a weak arc so that it could be upgraded when it's being used and when the
-                // original (users) arc is dropped then the program is done
+                // connection is closed the filter could be freed
                 Weak::into_raw(Arc::downgrade(&filter)) as *const _,
                 // This is enabled by default to remove the Option requirement around the
-                // `path` method from the `Request` struct. To notify the shell of file
-                // transfer progress the path is required.
+                // `path` method from the `Request` struct
                 // TODO: does this mean ^ or does it just mean the path isn't relative to the sync root?
                 self.0 | CloudFilters::CF_CONNECT_FLAG_REQUIRE_FULL_FILE_PATH,
             )
         }
-        .map(|key| Provider::new(key.0, filter))
+        .map(|key| Session::new(OwnedConnectionKey::new(key.0, (callbacks, filter))))
     }
 }
 

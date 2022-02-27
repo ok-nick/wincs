@@ -194,7 +194,7 @@ impl SyncFilter for Filter {
         let end = range.end;
         let mut position = range.start;
 
-        // buffered capacity of 4kb to comply with the windows api
+        // buffered capacity of 4KiB to comply with the windows api
         // TODO: if > 4096 bytes are read and not eof then this will error, need to use aligned_writer
         let mut client_file = BufWriter::with_capacity(4096, request.placeholder());
         let mut server_file = File::open(server_path).unwrap();

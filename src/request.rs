@@ -8,6 +8,7 @@ use windows::{
 
 use crate::{
     command::{Command, CreatePlaceholders},
+    key::{BorrowedConnectionKey, BorrowedTransferKey},
     placeholder::Placeholder,
     placeholder_file::PlaceholderFile,
 };
@@ -20,12 +21,14 @@ impl Request {
         Self(info)
     }
 
-    pub fn connection_key(&self) -> isize {
-        self.0.ConnectionKey.0
+    pub fn connection_key(&self) -> &BorrowedConnectionKey {
+        BorrowedConnectionKey::new(&self.0.ConnectionKey.0)
     }
 
-    // TODO: Is this a volume guid path or its actual guid? If so, return a GUID
-    // instance
+    pub fn transfer_key(&self) -> &BorrowedTransferKey {
+        BorrowedTransferKey::new(&self.0.TransferKey)
+    }
+
     pub fn volume_guid_name(&self) -> &U16CStr {
         unsafe { U16CStr::from_ptr_str(self.0.VolumeGuidName.0) }
     }
@@ -36,6 +39,12 @@ impl Request {
 
     pub fn volume_serial_number(&self) -> u32 {
         self.0.VolumeSerialNumber
+    }
+
+    // TODO: this is optional depending on whether they specified the flag on
+    // connect?
+    pub fn process(&self) -> Process {
+        Process(unsafe { *self.0.ProcessInfo })
     }
 
     pub fn sync_root_file_id(&self) -> i64 {
@@ -58,51 +67,42 @@ impl Request {
             .into()
     }
 
-    pub fn transfer_key(&self) -> i64 {
-        self.0.TransferKey
-    }
-
-    // ranges from 0-15 (CF_MAX_PRIORITY_HINT)
+    // ranges from 0-CF_MAX_PRIORITY_HINT (15)
     pub fn priority_hint(&self) -> u8 {
         self.0.PriorityHint
     }
 
-    // TODO: this is optional depending on whether they specified the flag on
-    // connect?
-    pub fn process(&self) -> Process {
-        Process(unsafe { *self.0.ProcessInfo })
-    }
+    // https://docs.microsoft.com/en-us/answers/questions/749979/what-is-a-requestkey-cfapi.html
+    // pub fn request_key(&self) -> i64 {
+    //     self.0.RequestKey
+    // }
 
-    pub fn request_key(&self) -> i64 {
-        self.0.RequestKey
-    }
-
-    pub fn file_blob(&self) -> Option<&[u8]> {
-        match self.0.FileIdentityLength {
-            0 => None,
-            _ => Some(unsafe {
-                slice::from_raw_parts(
-                    self.0.FileIdentity as *mut u8,
-                    self.0.FileIdentityLength as usize,
-                )
-            }),
+    // TODO: move file blob and file-related stuff to the placeholder struct?
+    pub fn file_blob(&self) -> &[u8] {
+        unsafe {
+            slice::from_raw_parts(
+                self.0.FileIdentity as *mut u8,
+                self.0.FileIdentityLength as usize,
+            )
         }
     }
 
-    pub fn register_blob(&self) -> Option<&[u8]> {
-        match self.0.FileIdentityLength {
-            0 => None,
-            _ => Some(unsafe {
-                slice::from_raw_parts(
-                    self.0.SyncRootIdentity as *mut u8,
-                    self.0.SyncRootIdentityLength as usize,
-                )
-            }),
+    pub fn register_blob(&self) -> &[u8] {
+        unsafe {
+            slice::from_raw_parts(
+                self.0.SyncRootIdentity as *mut u8,
+                self.0.SyncRootIdentityLength as usize,
+            )
         }
     }
 
     pub fn placeholder(&self) -> Placeholder {
-        Placeholder::new(self.keys(), self.path(), self.file_size())
+        Placeholder::new(
+            self.connection_key(),
+            self.transfer_key(),
+            self.path(),
+            self.file_size(),
+        )
     }
 
     // https://docs.microsoft.com/en-us/windows/win32/api/cfapi/ne-cfapi-cf_callback_type#remarks
@@ -113,13 +113,16 @@ impl Request {
     pub fn reset_timeout() {}
 
     #[inline]
-    pub fn create_placeholder(&self, placeholder: PlaceholderFile) -> core::Result<()> {
-        self.create_placeholders(&[placeholder]).and(Ok(()))
+    pub fn create_placeholder(&self, placeholder: PlaceholderFile) -> core::Result<u64> {
+        self.create_placeholders(&[placeholder])
+            .map(|mut x| x.remove(0))?
     }
 
-    // TODO: change this method and the one above to return the errors and placeholders for each failed creation
     #[inline]
-    pub fn create_placeholders(&self, placeholders: &[PlaceholderFile]) -> core::Result<u32> {
+    pub fn create_placeholders(
+        &self,
+        placeholders: &[PlaceholderFile],
+    ) -> core::Result<Vec<core::Result<u64>>> {
         self.create_placeholders_with_total(placeholders, placeholders.len() as u64)
     }
 
@@ -127,20 +130,12 @@ impl Request {
         &self,
         placeholders: &[PlaceholderFile],
         total: u64,
-    ) -> core::Result<u32> {
+    ) -> core::Result<Vec<core::Result<u64>>> {
         CreatePlaceholders {
             placeholders,
             total,
         }
-        .execute(self.keys())
-    }
-
-    pub(crate) fn keys(&self) -> Keys {
-        Keys {
-            connection_key: self.connection_key(),
-            transfer_key: self.transfer_key(),
-            request_key: self.request_key(),
-        }
+        .execute(*self.connection_key().key(), *self.transfer_key().key())
     }
 }
 
@@ -156,7 +151,6 @@ impl Process {
         self.0.ProcessId
     }
 
-    // TODO: read command_line
     pub fn session_id(&self) -> u32 {
         self.0.SessionId
     }
@@ -180,11 +174,4 @@ impl Process {
             Some(path.to_os_string().into())
         }
     }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct Keys {
-    pub connection_key: isize,
-    pub request_key: i64,
-    pub transfer_key: i64,
 }

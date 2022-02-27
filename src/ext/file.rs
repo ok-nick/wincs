@@ -2,7 +2,7 @@ use std::{
     fs::File,
     mem::{self, MaybeUninit},
     ops::{Bound, Range, RangeBounds},
-    os::windows::io::AsRawHandle,
+    os::windows::{io::AsRawHandle, prelude::RawHandle},
     ptr,
 };
 
@@ -27,22 +27,21 @@ use windows::{
 
 use crate::{
     placeholder_file::Metadata,
-    root::{
-        register::{HydrationPolicy, HydrationType, InSyncPolicy, PopulationType},
-        set_flag,
-    },
+    root::register::{HydrationPolicy, HydrationType, InSyncPolicy, PopulationType},
+    utility::set_flag,
 };
 
-// TODO: Support file identities
 pub trait FileExt: AsRawHandle {
     fn to_placeholder(&self, options: ConvertOptions) -> core::Result<u64> {
         let mut usn = MaybeUninit::<i64>::uninit();
         unsafe {
             CfConvertToPlaceholder(
                 HANDLE(self.as_raw_handle() as isize),
-                ptr::null(),
-                0,
-                options.0,
+                options
+                    .blob
+                    .map_or(ptr::null(), |blob| blob.as_ptr() as *const _),
+                options.blob.map_or(0, |blob| blob.len() as u32),
+                options.flags,
                 usn.as_mut_ptr(),
                 ptr::null_mut(),
             )
@@ -61,8 +60,8 @@ pub trait FileExt: AsRawHandle {
         }
     }
 
-    // TODO: this should be split up into multiple functions
-    fn update_placeholder(&self, mut options: UpdateOptions) -> core::Result<Option<u64>> {
+    // this could be split into multiple functions to make common patterns easier
+    fn update(&self, mut options: UpdateOptions) -> core::Result<Option<u64>> {
         unsafe {
             CfUpdatePlaceholder(
                 HANDLE(self.as_raw_handle() as isize),
@@ -79,7 +78,7 @@ pub trait FileExt: AsRawHandle {
         }
     }
 
-    fn hydrate_placeholder<T: RangeBounds<u64>>(&self, range: T) -> core::Result<()> {
+    fn hydrate<T: RangeBounds<u64>>(&self, range: T) -> core::Result<()> {
         unsafe {
             CfHydratePlaceholder(
                 HANDLE(self.as_raw_handle() as isize),
@@ -99,42 +98,16 @@ pub trait FileExt: AsRawHandle {
         }
     }
 
-    // TODO: create two separate functions for the background param
-    fn dehydrate_placeholder<T: RangeBounds<u64>>(
-        &self,
-        range: T,
-        background: bool,
-    ) -> core::Result<()> {
-        // self.update_placeholder(UpdateOptions::default().dehydrate_range(range))?;
-        unsafe {
-            // TODO: is this function deprecated or not?
-            CfDehydratePlaceholder(
-                HANDLE(self.as_raw_handle() as isize),
-                // TODO: These bounds checks and behavior could be abstracted into a separate struct. Do other API's that require ranges
-                // follow the same conventions?
-                match range.start_bound() {
-                    Bound::Included(x) => *x as i64,
-                    Bound::Excluded(x) => x.saturating_add(1) as i64,
-                    Bound::Unbounded => 0,
-                },
-                match range.end_bound() {
-                    Bound::Included(x) => *x as i64,
-                    Bound::Excluded(x) => x.saturating_sub(1) as i64,
-                    // This behavior is documented in CfDehydratePlaceholder
-                    Bound::Unbounded => -1,
-                },
-                if background {
-                    CloudFilters::CF_DEHYDRATE_FLAG_NONE
-                } else {
-                    CloudFilters::CF_DEHYDRATE_FLAG_BACKGROUND
-                },
-                ptr::null_mut(),
-            )
-        }
+    fn dehydrate<T: RangeBounds<u64>>(&self, range: T) -> core::Result<()> {
+        dehydrate(self.as_raw_handle(), range, false)
+    }
+
+    fn dehydrate_in_background<T: RangeBounds<u64>>(&self, range: T) -> core::Result<()> {
+        dehydrate(self.as_raw_handle(), range, true)
     }
 
     fn placeholder_info(&self) -> core::Result<PlaceholderInfo> {
-        // TODO: this except finds the size after 2 calls of CfGetPlaceholderInfo
+        // TODO: same as below except finds the size after 2 calls of CfGetPlaceholderInfo
         todo!()
     }
 
@@ -161,7 +134,9 @@ pub trait FileExt: AsRawHandle {
 
     // if it fails, it will be Err,
     // if it is not a placeholder, then it will be None
+    // it should instead error with not a placeholder
     // TODO: why is the value showing 9 in my tests, 9 is not a valid enum?
+    // does it return flags?
     fn placeholder_state(&self) -> core::Result<Option<PlaceholderState>> {
         let mut info = MaybeUninit::<FILE_ATTRIBUTE_TAG_INFO>::uninit();
         unsafe {
@@ -225,9 +200,38 @@ pub trait FileExt: AsRawHandle {
         })
     }
 
-    fn is_in_sync_root() -> bool {
-        // TODO: this
+    fn in_sync_root() -> bool {
+        // TODO: this should use the uwp apis
         todo!()
+    }
+}
+
+fn dehydrate<T: RangeBounds<u64>>(
+    handle: RawHandle,
+    range: T,
+    background: bool,
+) -> core::Result<()> {
+    unsafe {
+        CfDehydratePlaceholder(
+            HANDLE(handle as isize),
+            match range.start_bound() {
+                Bound::Included(x) => *x as i64,
+                Bound::Excluded(x) => x.saturating_add(1) as i64,
+                Bound::Unbounded => 0,
+            },
+            match range.end_bound() {
+                Bound::Included(x) => *x as i64,
+                Bound::Excluded(x) => x.saturating_sub(1) as i64,
+                // This behavior is documented in CfDehydratePlaceholder
+                Bound::Unbounded => -1,
+            },
+            if background {
+                CloudFilters::CF_DEHYDRATE_FLAG_NONE
+            } else {
+                CloudFilters::CF_DEHYDRATE_FLAG_BACKGROUND
+            },
+            ptr::null_mut(),
+        )
     }
 }
 
@@ -399,49 +403,74 @@ impl Default for PinOptions {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct ConvertOptions(CF_CONVERT_FLAGS);
+#[derive(Debug, Clone)]
+pub struct ConvertOptions<'a> {
+    flags: CF_CONVERT_FLAGS,
+    blob: Option<&'a [u8]>,
+}
 
-impl ConvertOptions {
-    pub fn mark_in_sync(&mut self, yes: bool) -> &mut Self {
-        set_flag(&mut self.0, CloudFilters::CF_CONVERT_FLAG_MARK_IN_SYNC, yes);
-        self
-    }
-
-    // TODO: can only be called for files
-    pub fn dehydrate(&mut self, yes: bool) -> &mut Self {
-        set_flag(&mut self.0, CloudFilters::CF_CONVERT_FLAG_DEHYDRATE, yes);
-        self
-    }
-
-    // TODO: can only be called for directories
-    pub fn on_demand_population(&mut self, yes: bool) -> &mut Self {
+impl<'a> ConvertOptions<'a> {
+    pub fn mark_in_sync(mut self, yes: bool) -> Self {
         set_flag(
-            &mut self.0,
+            &mut self.flags,
+            CloudFilters::CF_CONVERT_FLAG_MARK_IN_SYNC,
+            yes,
+        );
+        self
+    }
+
+    // can only be called for files
+    pub fn dehydrate(mut self, yes: bool) -> Self {
+        set_flag(
+            &mut self.flags,
+            CloudFilters::CF_CONVERT_FLAG_DEHYDRATE,
+            yes,
+        );
+        self
+    }
+
+    // can only be called for directories
+    pub fn on_demand_population(mut self, yes: bool) -> Self {
+        set_flag(
+            &mut self.flags,
             CloudFilters::CF_CONVERT_FLAG_ENABLE_ON_DEMAND_POPULATION,
             yes,
         );
         self
     }
 
-    pub fn always_full(&mut self, yes: bool) -> &mut Self {
-        set_flag(&mut self.0, CloudFilters::CF_CONVERT_FLAG_ALWAYS_FULL, yes);
+    pub fn blob(mut self, blob: &'a [u8]) -> Self {
+        assert!(
+            blob.len() <= CloudFilters::CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH as usize,
+            "blob size must not exceed {} bytes, got {} bytes",
+            CloudFilters::CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH,
+            blob.len()
+        );
+        self.blob = Some(blob);
         self
     }
 
-    pub fn convert_to_cloud_file(&mut self, yes: bool) -> &mut Self {
-        set_flag(
-            &mut self.0,
-            CloudFilters::CF_CONVERT_FLAG_FORCE_CONVERT_TO_CLOUD_FILE,
-            yes,
-        );
-        self
-    }
+    // pub fn always_full(mut self, yes: bool) -> Self {
+    //     set_flag(&mut self.flags, CloudFilters::CF_CONVERT_FLAG_ALWAYS_FULL, yes);
+    //     self
+    // }
+
+    // pub fn convert_to_cloud_file(mut self, yes: bool) -> Self {
+    //     set_flag(
+    //         &mut self.flags,
+    //         CloudFilters::CF_CONVERT_FLAG_FORCE_CONVERT_TO_CLOUD_FILE,
+    //         yes,
+    //     );
+    //     self
+    // }
 }
 
-impl Default for ConvertOptions {
+impl Default for ConvertOptions<'_> {
     fn default() -> Self {
-        Self(CloudFilters::CF_CONVERT_FLAG_NONE)
+        Self {
+            flags: CloudFilters::CF_CONVERT_FLAG_NONE,
+            blob: None,
+        }
     }
 }
 
@@ -497,14 +526,14 @@ impl<'a> UpdateOptions<'a> {
         self
     }
 
-    // TODO: files only
+    // files only
     #[must_use]
     pub fn dehydrate(mut self, yes: bool) -> Self {
         set_flag(&mut self.flags, CloudFilters::CF_UPDATE_FLAG_DEHYDRATE, yes);
         self
     }
 
-    // TODO: directories only
+    // directories only
     #[must_use]
     pub fn on_demand_population(mut self, yes: bool) -> Self {
         if yes {
@@ -560,6 +589,12 @@ impl<'a> UpdateOptions<'a> {
 
     #[must_use]
     pub fn blob(mut self, blob: &'a [u8]) -> Self {
+        assert!(
+            blob.len() <= CloudFilters::CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH as usize,
+            "blob size must not exceed {} bytes, got {} bytes",
+            CloudFilters::CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH,
+            blob.len()
+        );
         self.blob = Some(blob);
         self
     }
@@ -577,6 +612,7 @@ impl Default for UpdateOptions<'_> {
     }
 }
 
+// TODO: I don't think this is an enum
 #[derive(Debug, Clone, Copy)]
 pub enum PlaceholderState {
     Placeholder,
@@ -642,11 +678,7 @@ impl PlaceholderInfo {
         unsafe { &*self.info }.SyncRootFileId
     }
 
-    pub fn blob(&self) -> Option<&[u8]> {
-        let start = mem::size_of::<CF_PLACEHOLDER_STANDARD_INFO>() + 1;
-        match self.data.len() - start {
-            0 => None,
-            _ => Some(&self.data[start..]),
-        }
+    pub fn blob(&self) -> &[u8] {
+        &self.data[(mem::size_of::<CF_PLACEHOLDER_STANDARD_INFO>() + 1)..]
     }
 }

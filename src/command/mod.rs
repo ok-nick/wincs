@@ -6,16 +6,20 @@ use memoffset::offset_of;
 use windows::{
     core,
     Win32::Storage::CloudFilters::{
-        CfExecute, CF_CONNECTION_KEY, CF_OPERATION_INFO, CF_OPERATION_PARAMETERS,
+        self, CfExecute, CF_CONNECTION_KEY, CF_OPERATION_INFO, CF_OPERATION_PARAMETERS,
         CF_OPERATION_PARAMETERS_0, CF_OPERATION_TYPE,
     },
 };
 
-use crate::{error::CloudErrorKind, request::Keys};
+use crate::error::CloudErrorKind;
 pub use commands::*;
 
 pub trait Fallible: Command {
-    fn fail(keys: Keys, error_kind: CloudErrorKind) -> core::Result<Self::Result>;
+    fn fail(
+        connection_key: isize,
+        transfer_key: i64,
+        error_kind: CloudErrorKind,
+    ) -> core::Result<Self::Result>;
 }
 
 pub trait Command: Sized {
@@ -29,22 +33,27 @@ pub trait Command: Sized {
 
     fn build(&self) -> CF_OPERATION_PARAMETERS_0;
 
-    fn execute(&self, keys: Keys) -> core::Result<Self::Result> {
-        execute::<Self>(self.build(), keys)
+    fn execute(&self, connection_key: isize, transfer_key: i64) -> core::Result<Self::Result> {
+        execute::<Self>(self.build(), connection_key, transfer_key)
     }
 }
 
-pub fn execute<C: Command>(info: CF_OPERATION_PARAMETERS_0, keys: Keys) -> core::Result<C::Result> {
+pub fn execute<C: Command>(
+    info: CF_OPERATION_PARAMETERS_0,
+    connection_key: isize,
+    transfer_key: i64,
+) -> core::Result<C::Result> {
     unsafe {
         CfExecute(
             &CF_OPERATION_INFO {
                 StructSize: mem::size_of::<CF_OPERATION_INFO>() as u32,
                 Type: C::OPERATION,
-                ConnectionKey: CF_CONNECTION_KEY(keys.connection_key),
-                TransferKey: keys.transfer_key,
+                ConnectionKey: CF_CONNECTION_KEY(connection_key),
+                TransferKey: transfer_key,
                 CorrelationVector: ptr::null_mut(),
                 SyncStatus: ptr::null(),
-                RequestKey: keys.request_key,
+                // https://docs.microsoft.com/en-us/answers/questions/749979/what-is-a-requestkey-cfapi.html
+                RequestKey: CloudFilters::CF_REQUEST_KEY_DEFAULT as i64,
             } as *const _,
             &mut CF_OPERATION_PARAMETERS {
                 ParamSize: (mem::size_of::<C::Field>()

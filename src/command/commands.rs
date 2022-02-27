@@ -1,4 +1,4 @@
-use std::{ops::Range, ptr};
+use std::{ops::Range, ptr, slice};
 
 use windows::{
     core,
@@ -17,10 +17,9 @@ use crate::{
     command::{execute, Command, Fallible},
     error::CloudErrorKind,
     placeholder_file::{Metadata, PlaceholderFile},
-    request::Keys,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Read<'a> {
     pub buffer: &'a mut [u8],
     pub position: u64,
@@ -49,7 +48,7 @@ impl Command for Read<'_> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Write<'a> {
     pub buffer: &'a [u8],
     pub position: u64,
@@ -66,6 +65,7 @@ impl Command for Write<'_> {
     fn build(&self) -> CF_OPERATION_PARAMETERS_0 {
         CF_OPERATION_PARAMETERS_0 {
             TransferData: CF_OPERATION_PARAMETERS_0_6 {
+                // TODO: add flag for disable_on_demand_population
                 Flags: CloudFilters::CF_OPERATION_TRANSFER_DATA_FLAG_NONE,
                 CompletionStatus: Foundation::STATUS_SUCCESS,
                 Buffer: self.buffer.as_ptr() as *mut _,
@@ -77,7 +77,11 @@ impl Command for Write<'_> {
 }
 
 impl Fallible for Write<'_> {
-    fn fail(keys: Keys, error_kind: CloudErrorKind) -> core::Result<Self::Result> {
+    fn fail(
+        connection_key: isize,
+        transfer_key: i64,
+        error_kind: CloudErrorKind,
+    ) -> core::Result<Self::Result> {
         execute::<Self>(
             CF_OPERATION_PARAMETERS_0 {
                 TransferData: CF_OPERATION_PARAMETERS_0_6 {
@@ -90,12 +94,13 @@ impl Fallible for Write<'_> {
                     Length: 0,
                 },
             },
-            keys,
+            connection_key,
+            transfer_key,
         )
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Update<'a> {
     pub mark_in_sync: bool,
     pub metadata: Option<Metadata>,
@@ -130,7 +135,7 @@ impl Command for Update<'_> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CreatePlaceholders<'a> {
     pub placeholders: &'a [PlaceholderFile],
     pub total: u64,
@@ -139,11 +144,24 @@ pub struct CreatePlaceholders<'a> {
 impl Command for CreatePlaceholders<'_> {
     const OPERATION: CF_OPERATION_TYPE = CloudFilters::CF_OPERATION_TYPE_TRANSFER_PLACEHOLDERS;
 
-    type Result = u32;
+    type Result = Vec<core::Result<u64>>;
     type Field = CF_OPERATION_PARAMETERS_0_7;
 
     unsafe fn result(info: CF_OPERATION_PARAMETERS_0) -> Self::Result {
-        info.TransferPlaceholders.EntriesProcessed
+        // iterate over the placeholders and return, in a new vector, whether or
+        // not they were created with their new USN
+        slice::from_raw_parts(
+            info.TransferPlaceholders.PlaceholderArray,
+            info.TransferPlaceholders.PlaceholderCount as usize,
+        )
+        .iter()
+        .map(|placeholder| {
+            placeholder
+                .Result
+                .ok()
+                .map(|_| placeholder.CreateUsn as u64)
+        })
+        .collect()
     }
 
     fn build(&self) -> CF_OPERATION_PARAMETERS_0 {
@@ -161,7 +179,11 @@ impl Command for CreatePlaceholders<'_> {
 }
 
 impl<'a> Fallible for CreatePlaceholders<'a> {
-    fn fail(keys: Keys, error_kind: CloudErrorKind) -> core::Result<Self::Result> {
+    fn fail(
+        connection_key: isize,
+        transfer_key: i64,
+        error_kind: CloudErrorKind,
+    ) -> core::Result<Self::Result> {
         execute::<Self>(
             CF_OPERATION_PARAMETERS_0 {
                 TransferPlaceholders: CF_OPERATION_PARAMETERS_0_7 {
@@ -174,12 +196,13 @@ impl<'a> Fallible for CreatePlaceholders<'a> {
                     EntriesProcessed: 0,
                 },
             },
-            keys,
+            connection_key,
+            transfer_key,
         )
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Validate {
     pub range: Range<u64>,
 }
@@ -205,7 +228,11 @@ impl Command for Validate {
 }
 
 impl Fallible for Validate {
-    fn fail(keys: Keys, error_kind: CloudErrorKind) -> core::Result<Self::Result> {
+    fn fail(
+        connection_key: isize,
+        transfer_key: i64,
+        error_kind: CloudErrorKind,
+    ) -> core::Result<Self::Result> {
         execute::<Self>(
             CF_OPERATION_PARAMETERS_0 {
                 AckData: CF_OPERATION_PARAMETERS_0_0 {
@@ -215,12 +242,13 @@ impl Fallible for Validate {
                     Length: 0,
                 },
             },
-            keys,
+            connection_key,
+            transfer_key,
         )
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Dehydrate<'a> {
     pub blob: Option<&'a [u8]>,
 }
@@ -248,7 +276,11 @@ impl Command for Dehydrate<'_> {
 }
 
 impl Fallible for Dehydrate<'_> {
-    fn fail(keys: Keys, error_kind: CloudErrorKind) -> core::Result<Self::Result> {
+    fn fail(
+        connection_key: isize,
+        transfer_key: i64,
+        error_kind: CloudErrorKind,
+    ) -> core::Result<Self::Result> {
         execute::<Self>(
             CF_OPERATION_PARAMETERS_0 {
                 AckDehydrate: CF_OPERATION_PARAMETERS_0_1 {
@@ -258,12 +290,13 @@ impl Fallible for Dehydrate<'_> {
                     FileIdentityLength: 0,
                 },
             },
-            keys,
+            connection_key,
+            transfer_key,
         )
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Delete;
 
 impl Command for Delete {
@@ -285,7 +318,11 @@ impl Command for Delete {
 }
 
 impl Fallible for Delete {
-    fn fail(keys: Keys, error_kind: CloudErrorKind) -> core::Result<Self::Result> {
+    fn fail(
+        connection_key: isize,
+        transfer_key: i64,
+        error_kind: CloudErrorKind,
+    ) -> core::Result<Self::Result> {
         execute::<Self>(
             CF_OPERATION_PARAMETERS_0 {
                 AckDelete: CF_OPERATION_PARAMETERS_0_2 {
@@ -293,12 +330,13 @@ impl Fallible for Delete {
                     CompletionStatus: error_kind.into(),
                 },
             },
-            keys,
+            connection_key,
+            transfer_key,
         )
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Rename;
 
 impl Command for Rename {
@@ -320,7 +358,11 @@ impl Command for Rename {
 }
 
 impl Fallible for Rename {
-    fn fail(keys: Keys, error_kind: CloudErrorKind) -> core::Result<Self::Result> {
+    fn fail(
+        connection_key: isize,
+        transfer_key: i64,
+        error_kind: CloudErrorKind,
+    ) -> core::Result<Self::Result> {
         execute::<Self>(
             CF_OPERATION_PARAMETERS_0 {
                 AckRename: CF_OPERATION_PARAMETERS_0_3 {
@@ -328,7 +370,8 @@ impl Fallible for Rename {
                     CompletionStatus: error_kind.into(),
                 },
             },
-            keys,
+            connection_key,
+            transfer_key,
         )
     }
 }
