@@ -8,10 +8,13 @@ use windows::{
 
 use crate::{
     command::{Command, CreatePlaceholders},
-    key::{BorrowedConnectionKey, BorrowedTransferKey},
     placeholder::Placeholder,
     placeholder_file::PlaceholderFile,
+    usn::Usn,
 };
+
+pub type RawConnectionKey = isize;
+pub type RawTransferKey = i64;
 
 #[derive(Debug)]
 pub struct Request(CF_CALLBACK_INFO);
@@ -21,12 +24,12 @@ impl Request {
         Self(info)
     }
 
-    pub fn connection_key(&self) -> &BorrowedConnectionKey {
-        BorrowedConnectionKey::new(&self.0.ConnectionKey.0)
+    pub fn connection_key(&self) -> RawConnectionKey {
+        self.0.ConnectionKey.0
     }
 
-    pub fn transfer_key(&self) -> &BorrowedTransferKey {
-        BorrowedTransferKey::new(&self.0.TransferKey)
+    pub fn transfer_key(&self) -> RawTransferKey {
+        self.0.TransferKey
     }
 
     pub fn volume_guid_name(&self) -> &U16CStr {
@@ -41,8 +44,6 @@ impl Request {
         self.0.VolumeSerialNumber
     }
 
-    // TODO: this is optional depending on whether they specified the flag on
-    // connect?
     pub fn process(&self) -> Process {
         Process(unsafe { *self.0.ProcessInfo })
     }
@@ -113,7 +114,7 @@ impl Request {
     pub fn reset_timeout() {}
 
     #[inline]
-    pub fn create_placeholder(&self, placeholder: PlaceholderFile) -> core::Result<u64> {
+    pub fn create_placeholder(&self, placeholder: PlaceholderFile) -> core::Result<Usn> {
         self.create_placeholders(&[placeholder])
             .map(|mut x| x.remove(0))?
     }
@@ -122,7 +123,7 @@ impl Request {
     pub fn create_placeholders(
         &self,
         placeholders: &[PlaceholderFile],
-    ) -> core::Result<Vec<core::Result<u64>>> {
+    ) -> core::Result<Vec<core::Result<Usn>>> {
         self.create_placeholders_with_total(placeholders, placeholders.len() as u64)
     }
 
@@ -130,12 +131,12 @@ impl Request {
         &self,
         placeholders: &[PlaceholderFile],
         total: u64,
-    ) -> core::Result<Vec<core::Result<u64>>> {
+    ) -> core::Result<Vec<core::Result<Usn>>> {
         CreatePlaceholders {
             placeholders,
             total,
         }
-        .execute(*self.connection_key().key(), *self.transfer_key().key())
+        .execute(self.connection_key(), self.transfer_key())
     }
 }
 

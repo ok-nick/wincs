@@ -1,11 +1,21 @@
 pub mod command;
-pub mod error;
+mod error;
 pub mod ext;
-pub mod filter;
-pub mod key;
-pub mod placeholder;
-pub mod placeholder_file;
-pub mod request;
-pub mod root;
-pub mod session;
-pub mod utility;
+mod filter;
+mod placeholder;
+mod placeholder_file;
+mod request;
+mod root;
+mod usn;
+mod utility;
+
+pub use error::CloudErrorKind;
+pub use filter::SyncFilter;
+pub use placeholder::{Placeholder, UpdateOptions};
+pub use placeholder_file::{BatchCreate, Metadata, PlaceholderFile};
+pub use request::{Process, Request};
+pub use root::{
+    active_roots, is_supported, Connection, HydrationPolicy, HydrationType, PopulationType,
+    ProtectionMode, Registration, SecurityId, Session, SupportedAttributes, SyncRoot,
+    SyncRootBuilder, SyncRootId,
+};

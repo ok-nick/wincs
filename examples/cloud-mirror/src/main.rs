@@ -17,7 +17,7 @@ use wincs::{
     request::Request,
     root::{
         connect::ConnectOptions,
-        register::{HydrationType, InSyncPolicy, PopulationType, RegisterOptions},
+        register::{HydrationType, PopulationType, RegisterOptions, SupportedAttributes},
         SyncRoot,
     },
 };
@@ -80,8 +80,8 @@ fn main() {
                 .recycle_bin_uri("http://cloudmirror.example.com/recyclebin".into())
                 .hydration_type(HydrationType::Full)
                 .population_type(PopulationType::AlwaysFull)
-                .in_sync_policy(
-                    InSyncPolicy::new()
+                .supported_attributes(
+                    SupportedAttributes::new()
                         .file_creation_time(true)
                         .directory_creation_time(true),
                 )

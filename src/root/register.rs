@@ -1,10 +1,18 @@
-use widestring::U16String;
+use std::path::Path;
+
+use widestring::{U16Str, U16String};
 use windows::{
-    core::GUID,
-    Storage::Provider::{
-        StorageProviderHydrationPolicy, StorageProviderHydrationPolicyModifier,
-        StorageProviderInSyncPolicy, StorageProviderPopulationPolicy,
-        StorageProviderProtectionMode,
+    core::{self, GUID},
+    Foundation::Uri,
+    Storage::{
+        Provider::{
+            StorageProviderHardlinkPolicy, StorageProviderHydrationPolicy,
+            StorageProviderHydrationPolicyModifier, StorageProviderInSyncPolicy,
+            StorageProviderPopulationPolicy, StorageProviderProtectionMode,
+            StorageProviderSyncRootInfo, StorageProviderSyncRootManager,
+        },
+        StorageFolder,
+        Streams::DataWriter,
     },
     Win32::Storage::CloudFilters::{
         self, CF_HYDRATION_POLICY_MODIFIER_USHORT, CF_HYDRATION_POLICY_PRIMARY,
@@ -13,29 +21,46 @@ use windows::{
     },
 };
 
-use crate::utility::set_flag;
+use crate::{utility::ToHString, SyncRoot};
 
 #[derive(Debug, Clone)]
-pub struct RegisterOptions<'a> {
-    pub(crate) show_siblings_as_group: bool,
-    pub(crate) allow_pinning: bool,
-    pub(crate) allow_hardlinks: bool,
-    pub(crate) display_name: Option<U16String>,
-    pub(crate) recycle_bin_uri: Option<U16String>,
-    pub(crate) version: Option<U16String>,
-    pub(crate) hydration_type: HydrationType,
-    pub(crate) hydration_policy: HydrationPolicy,
-    pub(crate) population_type: PopulationType,
-    pub(crate) protection_mode: ProtectionMode,
-    pub(crate) provider_id: Option<GUID>,
-    pub(crate) in_sync_policy: InSyncPolicy,
-    pub(crate) icon: Option<U16String>,
-    pub(crate) blob: Option<&'a [u8]>,
+pub struct Registration<'a> {
+    sync_root: &'a SyncRoot,
+    show_siblings_as_group: bool,
+    allow_pinning: bool,
+    allow_hardlinks: bool,
+    display_name: Option<&'a U16Str>,
+    recycle_bin_uri: Option<&'a U16Str>,
+    version: Option<&'a U16Str>,
+    hydration_type: HydrationType,
+    hydration_policy: HydrationPolicy,
+    population_type: PopulationType,
+    protection_mode: ProtectionMode,
+    provider_id: Option<GUID>,
+    supported_attributes: SupportedAttributes,
+    icon: U16String,
+    blob: Option<&'a [u8]>,
 }
 
-impl<'a> RegisterOptions<'a> {
-    pub fn new() -> Self {
-        Self::default()
+impl<'a> Registration<'a> {
+    pub fn from_sync_root(sync_root: &'a SyncRoot) -> Self {
+        Self {
+            sync_root,
+            display_name: None,
+            recycle_bin_uri: None,
+            show_siblings_as_group: false,
+            allow_pinning: false,
+            version: None,
+            provider_id: None,
+            protection_mode: ProtectionMode::Unknown,
+            allow_hardlinks: false,
+            hydration_type: HydrationType::Progressive, // stated as default in the docs
+            hydration_policy: HydrationPolicy::default(),
+            population_type: PopulationType::Full,
+            supported_attributes: SupportedAttributes::default(),
+            icon: U16String::from_str("C:\\Windows\\System32\\imageres.dll,1525"),
+            blob: None,
+        }
     }
 
     #[must_use]
@@ -45,33 +70,34 @@ impl<'a> RegisterOptions<'a> {
     }
 
     #[must_use]
-    pub fn allow_pinning(mut self, yes: bool) -> Self {
-        self.allow_pinning = yes;
+    pub fn allow_pinning(mut self) -> Self {
+        self.allow_pinning = true;
         self
     }
 
     #[must_use]
-    pub fn allow_hardlinks(mut self, yes: bool) -> Self {
-        self.allow_hardlinks = yes;
+    pub fn allow_hardlinks(mut self) -> Self {
+        self.allow_hardlinks = true;
         self
     }
 
-    // I made this default to the provider_name
+    // I made this default to provider_name since it is required for a sync engine to be registered
     #[must_use]
-    pub fn display_name(mut self, display_name: U16String) -> Self {
+    pub fn display_name(mut self, display_name: &'a U16Str) -> Self {
         self.display_name = Some(display_name);
         self
     }
 
     #[must_use]
-    pub fn recycle_bin_uri(mut self, uri: U16String) -> Self {
+    pub fn recycle_bin_uri(mut self, uri: &'a U16Str) -> Self {
         self.recycle_bin_uri = Some(uri);
         self
     }
 
+    // I think this is for sync roots with the same provider name?
     #[must_use]
-    pub fn show_siblings_as_group(mut self, yes: bool) -> Self {
-        self.show_siblings_as_group = yes;
+    pub fn show_siblings_as_group(mut self) -> Self {
+        self.show_siblings_as_group = true;
         self
     }
 
@@ -82,7 +108,7 @@ impl<'a> RegisterOptions<'a> {
     }
 
     #[must_use]
-    pub fn version(mut self, version: U16String) -> Self {
+    pub fn version(mut self, version: &'a U16Str) -> Self {
         assert!(
             version.len() <= CloudFilters::CF_MAX_PROVIDER_VERSION_LENGTH as usize,
             "version length must not exceed {} characters, got {} characters",
@@ -100,8 +126,8 @@ impl<'a> RegisterOptions<'a> {
     }
 
     #[must_use]
-    pub fn in_sync_policy(mut self, in_sync_policy: InSyncPolicy) -> Self {
-        self.in_sync_policy = in_sync_policy;
+    pub fn supported_attributes(mut self, supported_attributes: SupportedAttributes) -> Self {
+        self.supported_attributes = supported_attributes;
         self
     }
 
@@ -111,11 +137,12 @@ impl<'a> RegisterOptions<'a> {
         self
     }
 
+    // TODO: this field is required
     // https://docs.microsoft.com/en-us/windows/win32/menurc/icon-resource
     #[must_use]
     pub fn icon(mut self, mut path: U16String, index: u16) -> Self {
         path.push_str(format!(",{index}"));
-        self.icon = Some(path);
+        self.icon = path;
         self
     }
 
@@ -129,26 +156,53 @@ impl<'a> RegisterOptions<'a> {
         self.blob = Some(blob);
         self
     }
-}
 
-impl Default for RegisterOptions<'_> {
-    fn default() -> Self {
-        Self {
-            display_name: None,
-            recycle_bin_uri: None,
-            show_siblings_as_group: false,
-            allow_pinning: true,
-            version: None,
-            provider_id: None,
-            protection_mode: ProtectionMode::Unknown,
-            allow_hardlinks: true,
-            hydration_type: HydrationType::Progressive, // stated as the default in the docs
-            hydration_policy: HydrationPolicy::default(),
-            population_type: PopulationType::Full,
-            in_sync_policy: InSyncPolicy::default(),
-            icon: None,
-            blob: None,
+    pub fn register<P: AsRef<Path>>(&self, path: P) -> core::Result<()> {
+        let info = StorageProviderSyncRootInfo::new()?;
+
+        info.SetProtectionMode(self.protection_mode.into())?;
+        info.SetShowSiblingsAsGroup(self.show_siblings_as_group)?;
+        info.SetHydrationPolicy(self.hydration_type.into())?;
+        info.SetHydrationPolicyModifier(self.hydration_policy.0)?;
+        info.SetPopulationPolicy(self.population_type.into())?;
+        info.SetInSyncPolicy(self.supported_attributes.0)?;
+        info.SetDisplayNameResource(
+            self.display_name
+                .unwrap_or_else(|| self.sync_root.provider_name())
+                .to_hstring(),
+        )?;
+        info.SetIconResource(self.icon.to_hstring())?;
+        info.SetPath(
+            StorageFolder::GetFolderFromPathAsync(
+                &U16String::from_os_str(path.as_ref().as_os_str()).to_hstring(),
+            )?
+            .get()?,
+        )?;
+        info.SetHardlinkPolicy(if self.allow_hardlinks {
+            StorageProviderHardlinkPolicy::Allowed
+        } else {
+            StorageProviderHardlinkPolicy::None
+        })?;
+        info.SetId(&self.sync_root.to_id().into_inner())?;
+
+        if let Some(provider_id) = self.provider_id {
+            info.SetProviderId(provider_id)?;
         }
+        if let Some(version) = &self.version {
+            info.SetVersion(version.to_hstring())?;
+        }
+
+        if let Some(uri) = &self.recycle_bin_uri {
+            info.SetRecycleBinUri(Uri::CreateUri(uri.to_hstring())?)?;
+        }
+        if let Some(blob) = &self.blob {
+            // TODO: implement IBuffer interface for slices to avoid a copy
+            let writer = DataWriter::new()?;
+            writer.WriteBytes(blob)?;
+            info.SetContext(writer.DetachBuffer()?)?;
+        }
+
+        StorageProviderSyncRootManager::Register(info)
     }
 }
 
@@ -207,42 +261,28 @@ impl HydrationPolicy {
     }
 
     #[must_use]
-    pub fn validation_required(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.0,
-            StorageProviderHydrationPolicyModifier::ValidationRequired,
-            yes,
-        );
+    pub fn require_validation(mut self) -> Self {
+        self.0 |= StorageProviderHydrationPolicyModifier::ValidationRequired;
+        self
+    }
+
+    // TODO: assert this, it is incompatible with the validation required parameter
+    // https://docs.microsoft.com/en-us/windows/win32/api/cfapi/ne-cfapi-cf_hydration_policy_modifier
+    #[must_use]
+    pub fn allow_streaming(mut self) -> Self {
+        self.0 |= StorageProviderHydrationPolicyModifier::StreamingAllowed;
         self
     }
 
     #[must_use]
-    pub fn streaming_allowed(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.0,
-            StorageProviderHydrationPolicyModifier::StreamingAllowed,
-            yes,
-        );
+    pub fn allow_platform_dehydration(mut self) -> Self {
+        self.0 |= StorageProviderHydrationPolicyModifier::AutoDehydrationAllowed;
         self
     }
 
     #[must_use]
-    pub fn auto_dehydration_allowed(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.0,
-            StorageProviderHydrationPolicyModifier::AutoDehydrationAllowed,
-            yes,
-        );
-        self
-    }
-
-    #[must_use]
-    pub fn allow_full_restart_hydration(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.0,
-            StorageProviderHydrationPolicyModifier::AllowFullRestartHydration,
-            yes,
-        );
+    pub fn allow_full_restart_hydration(mut self) -> Self {
+        self.0 |= StorageProviderHydrationPolicyModifier::AllowFullRestartHydration;
         self
     }
 }
@@ -285,122 +325,83 @@ impl From<CF_POPULATION_POLICY_PRIMARY_USHORT> for PopulationType {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct InSyncPolicy(pub(crate) StorageProviderInSyncPolicy);
+pub struct SupportedAttributes(pub(crate) StorageProviderInSyncPolicy);
 
-impl InSyncPolicy {
+impl SupportedAttributes {
     pub fn new() -> Self {
         Self::default()
     }
 
     #[must_use]
-    pub fn file_creation_time(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.0,
-            StorageProviderInSyncPolicy::FileCreationTime,
-            yes,
-        );
+    pub fn file_creation_time(mut self) -> Self {
+        self.0 |= StorageProviderInSyncPolicy::FileCreationTime;
         self
     }
 
     #[must_use]
-    pub fn file_readonly_attribute(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.0,
-            StorageProviderInSyncPolicy::FileReadOnlyAttribute,
-            yes,
-        );
+    pub fn file_readonly(mut self) -> Self {
+        self.0 |= StorageProviderInSyncPolicy::FileReadOnlyAttribute;
         self
     }
 
     #[must_use]
-    pub fn hidden_attribute(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.0,
-            StorageProviderInSyncPolicy::FileHiddenAttribute,
-            yes,
-        );
+    pub fn file_hidden(mut self) -> Self {
+        self.0 |= StorageProviderInSyncPolicy::FileHiddenAttribute;
         self
     }
 
     #[must_use]
-    pub fn file_system_attribute(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.0,
-            StorageProviderInSyncPolicy::FileSystemAttribute,
-            yes,
-        );
+    pub fn file_system(mut self) -> Self {
+        self.0 |= StorageProviderInSyncPolicy::FileSystemAttribute;
         self
     }
 
     #[must_use]
-    pub fn directory_creation_time(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.0,
-            StorageProviderInSyncPolicy::DirectoryCreationTime,
-            yes,
-        );
+    pub fn file_last_write_time(mut self) -> Self {
+        self.0 |= StorageProviderInSyncPolicy::FileLastWriteTime;
         self
     }
 
     #[must_use]
-    pub fn directory_readonly_attribute(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.0,
-            StorageProviderInSyncPolicy::DirectoryReadOnlyAttribute,
-            yes,
-        );
+    pub fn directory_creation_time(mut self) -> Self {
+        self.0 |= StorageProviderInSyncPolicy::DirectoryCreationTime;
         self
     }
 
     #[must_use]
-    pub fn directory_hidden_attribute(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.0,
-            StorageProviderInSyncPolicy::DirectoryHiddenAttribute,
-            yes,
-        );
+    pub fn directory_readonly(mut self) -> Self {
+        self.0 |= StorageProviderInSyncPolicy::DirectoryReadOnlyAttribute;
         self
     }
 
     #[must_use]
-    pub fn directory_last_write_time(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.0,
-            StorageProviderInSyncPolicy::DirectoryLastWriteTime,
-            yes,
-        );
+    pub fn directory_hidden(mut self) -> Self {
+        self.0 |= StorageProviderInSyncPolicy::DirectoryHiddenAttribute;
         self
     }
 
     #[must_use]
-
-    pub fn file_last_write_time(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.0,
-            StorageProviderInSyncPolicy::FileLastWriteTime,
-            yes,
-        );
+    pub fn directory_last_write_time(mut self) -> Self {
+        self.0 |= StorageProviderInSyncPolicy::DirectoryLastWriteTime;
         self
     }
 
+    // TODO: I'm not sure how this differs from the default policy,
+    // https://docs.microsoft.com/en-us/answers/questions/760677/how-does-cf-insync-policy-none-differ-from-cf-insy.html
     #[must_use]
-    pub fn preserve_insync_for_sync_engine(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.0,
-            StorageProviderInSyncPolicy::PreserveInsyncForSyncEngine,
-            yes,
-        );
+    pub fn none(mut self) -> Self {
+        self.0 |= StorageProviderInSyncPolicy::PreserveInsyncForSyncEngine;
         self
     }
 }
 
-impl Default for InSyncPolicy {
+impl Default for SupportedAttributes {
     fn default() -> Self {
         Self(StorageProviderInSyncPolicy::Default)
     }
 }
 
-impl From<CF_INSYNC_POLICY> for InSyncPolicy {
+impl From<CF_INSYNC_POLICY> for SupportedAttributes {
     fn from(policy: CF_INSYNC_POLICY) -> Self {
         Self(StorageProviderInSyncPolicy(policy.0))
     }

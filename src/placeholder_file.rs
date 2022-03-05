@@ -1,4 +1,4 @@
-use std::{fs, os::windows::prelude::MetadataExt, path::Path, ptr};
+use std::{fs, marker::PhantomData, os::windows::prelude::MetadataExt, path::Path, ptr};
 
 use widestring::U16CString;
 use windows::{
@@ -9,38 +9,30 @@ use windows::{
             CloudFilters::{
                 self, CfCreatePlaceholders, CF_FS_METADATA, CF_PLACEHOLDER_CREATE_INFO,
             },
-            FileSystem::{self, FILE_BASIC_INFO},
+            FileSystem::FILE_BASIC_INFO,
         },
     },
 };
 
-use crate::utility::set_flag;
+use crate::usn::Usn;
 
 #[derive(Debug)]
-pub struct PlaceholderFile(CF_PLACEHOLDER_CREATE_INFO);
+pub struct PlaceholderFile<'a>(CF_PLACEHOLDER_CREATE_INFO, PhantomData<&'a ()>);
 
-impl<'a> PlaceholderFile {
+impl<'a> PlaceholderFile<'a> {
     pub fn new() -> Self {
         Self::default()
     }
 
     #[must_use]
-    pub fn disable_on_demand_population(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.0.Flags,
-            CloudFilters::CF_PLACEHOLDER_CREATE_FLAG_DISABLE_ON_DEMAND_POPULATION,
-            yes,
-        );
+    pub fn children_present(mut self) -> Self {
+        self.0.Flags |= CloudFilters::CF_PLACEHOLDER_CREATE_FLAG_DISABLE_ON_DEMAND_POPULATION;
         self
     }
 
     #[must_use]
-    pub fn mark_in_sync(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.0.Flags,
-            CloudFilters::CF_PLACEHOLDER_CREATE_FLAG_MARK_IN_SYNC,
-            yes,
-        );
+    pub fn mark_sync(mut self) -> Self {
+        self.0.Flags |= CloudFilters::CF_PLACEHOLDER_CREATE_FLAG_MARK_IN_SYNC;
         self
     }
 
@@ -64,7 +56,7 @@ impl<'a> PlaceholderFile {
         self
     }
 
-    pub fn create<P: AsRef<Path>>(mut self, path: P) -> core::Result<u64> {
+    pub fn create<P: AsRef<Path>>(mut self, path: P) -> core::Result<Usn> {
         let path = path.as_ref();
 
         // TODO: handle unwraps
@@ -82,31 +74,34 @@ impl<'a> PlaceholderFile {
             )?;
         }
 
-        self.0.Result.ok().map(|_| self.0.CreateUsn as u64)
+        self.0.Result.ok().map(|_| self.0.CreateUsn as Usn)
     }
 }
 
-impl Default for PlaceholderFile {
+impl Default for PlaceholderFile<'_> {
     fn default() -> Self {
-        Self(CF_PLACEHOLDER_CREATE_INFO {
-            RelativeFileName: Default::default(),
-            FsMetadata: Default::default(),
-            FileIdentity: ptr::null_mut(),
-            // this is required only for files, who knows why
-            FileIdentityLength: 1,
-            Flags: CloudFilters::CF_PLACEHOLDER_CREATE_FLAG_NONE,
-            Result: Foundation::S_OK,
-            CreateUsn: 0,
-        })
+        Self(
+            CF_PLACEHOLDER_CREATE_INFO {
+                RelativeFileName: Default::default(),
+                FsMetadata: Default::default(),
+                FileIdentity: ptr::null_mut(),
+                // this is required only for files, who knows why
+                FileIdentityLength: 1,
+                Flags: CloudFilters::CF_PLACEHOLDER_CREATE_FLAG_NONE,
+                Result: Foundation::S_OK,
+                CreateUsn: 0,
+            },
+            PhantomData,
+        )
     }
 }
 
 pub trait BatchCreate {
-    fn create<P: AsRef<Path>>(&mut self, path: P) -> core::Result<Vec<core::Result<u64>>>;
+    fn create<P: AsRef<Path>>(&mut self, path: P) -> core::Result<Vec<core::Result<Usn>>>;
 }
 
-impl BatchCreate for [PlaceholderFile] {
-    fn create<P: AsRef<Path>>(&mut self, path: P) -> core::Result<Vec<core::Result<u64>>> {
+impl BatchCreate for [PlaceholderFile<'_>] {
+    fn create<P: AsRef<Path>>(&mut self, path: P) -> core::Result<Vec<core::Result<Usn>>> {
         unsafe {
             CfCreatePlaceholders(
                 path.as_ref().as_os_str(),
@@ -124,7 +119,7 @@ impl BatchCreate for [PlaceholderFile] {
                     .0
                     .Result
                     .ok()
-                    .map(|_| placeholder.0.CreateUsn as u64)
+                    .map(|_| placeholder.0.CreateUsn as Usn)
             })
             .collect())
     }
@@ -163,25 +158,14 @@ impl Metadata {
     }
 
     #[must_use]
-    pub fn file_size(mut self, size: u64) -> Self {
+    pub fn size(mut self, size: u64) -> Self {
         self.0.FileSize = size as i64;
         self
     }
 
     #[must_use]
-    pub fn readonly(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.0.BasicInfo.FileAttributes,
-            FileSystem::FILE_ATTRIBUTE_READONLY.0,
-            yes,
-        );
-        self
-    }
-
-    // TODO: do file attributes
-    #[must_use]
-    pub fn file_attributes(mut self, flags: u32) -> Self {
-        self.0.BasicInfo.FileAttributes = flags;
+    pub fn attributes(mut self, attributes: u32) -> Self {
+        self.0.BasicInfo.FileAttributes = attributes;
         self
     }
 }

@@ -15,10 +15,10 @@ use windows::{
             CloudFilters::{
                 self, CfConvertToPlaceholder, CfDehydratePlaceholder, CfGetPlaceholderInfo,
                 CfGetPlaceholderStateFromFileInfo, CfGetSyncRootInfoByHandle, CfHydratePlaceholder,
-                CfRevertPlaceholder, CfSetPinState, CfUpdatePlaceholder, CF_CONVERT_FLAGS,
-                CF_FILE_RANGE, CF_PIN_STATE, CF_PLACEHOLDER_STANDARD_INFO, CF_PLACEHOLDER_STATE,
-                CF_SET_PIN_FLAGS, CF_SYNC_PROVIDER_STATUS, CF_SYNC_ROOT_INFO_STANDARD,
-                CF_SYNC_ROOT_STANDARD_INFO, CF_UPDATE_FLAGS,
+                CfRevertPlaceholder, CfSetInSyncState, CfSetPinState, CfUpdatePlaceholder,
+                CF_CONVERT_FLAGS, CF_FILE_RANGE, CF_PIN_STATE, CF_PLACEHOLDER_STANDARD_INFO,
+                CF_PLACEHOLDER_STATE, CF_SET_PIN_FLAGS, CF_SYNC_PROVIDER_STATUS,
+                CF_SYNC_ROOT_INFO_STANDARD, CF_SYNC_ROOT_STANDARD_INFO, CF_UPDATE_FLAGS,
             },
             FileSystem::{self, GetFileInformationByHandleEx, FILE_ATTRIBUTE_TAG_INFO},
         },
@@ -27,12 +27,12 @@ use windows::{
 
 use crate::{
     placeholder_file::Metadata,
-    root::register::{HydrationPolicy, HydrationType, InSyncPolicy, PopulationType},
-    utility::set_flag,
+    root::{HydrationPolicy, HydrationType, PopulationType, SupportedAttributes},
+    usn::Usn,
 };
 
 pub trait FileExt: AsRawHandle {
-    fn to_placeholder(&self, options: ConvertOptions) -> core::Result<u64> {
+    fn to_placeholder(&self, options: ConvertOptions) -> core::Result<Usn> {
         let mut usn = MaybeUninit::<i64>::uninit();
         unsafe {
             CfConvertToPlaceholder(
@@ -45,7 +45,7 @@ pub trait FileExt: AsRawHandle {
                 usn.as_mut_ptr(),
                 ptr::null_mut(),
             )
-            .map(|_| usn.assume_init() as u64)
+            .map(|_| usn.assume_init() as Usn)
         }
     }
 
@@ -61,7 +61,8 @@ pub trait FileExt: AsRawHandle {
     }
 
     // this could be split into multiple functions to make common patterns easier
-    fn update(&self, mut options: UpdateOptions) -> core::Result<Option<u64>> {
+    fn update(&self, usn: Usn, mut options: UpdateOptions) -> core::Result<Usn> {
+        let mut usn = usn as i64;
         unsafe {
             CfUpdatePlaceholder(
                 HANDLE(self.as_raw_handle() as isize),
@@ -71,10 +72,10 @@ pub trait FileExt: AsRawHandle {
                 options.dehydrate_range.as_mut_ptr(),
                 options.dehydrate_range.len() as u32,
                 options.flags,
-                options.usn.map_or(ptr::null_mut(), |x| x as *mut i64),
+                &mut usn as *mut _,
                 ptr::null_mut(),
             )
-            .map(|_| options.usn.map(|x| x as u64))
+            .map(|_| usn as Usn)
         }
     }
 
@@ -102,7 +103,7 @@ pub trait FileExt: AsRawHandle {
         dehydrate(self.as_raw_handle(), range, false)
     }
 
-    fn dehydrate_in_background<T: RangeBounds<u64>>(&self, range: T) -> core::Result<()> {
+    fn background_dehydrate<T: RangeBounds<u64>>(&self, range: T) -> core::Result<()> {
         dehydrate(self.as_raw_handle(), range, true)
     }
 
@@ -166,6 +167,15 @@ pub trait FileExt: AsRawHandle {
         }
     }
 
+    // TODO: make a type for Usn's
+    fn mark_sync(&self, usn: Usn) -> core::Result<Usn> {
+        mark_sync_state(self.as_raw_handle(), true, usn)
+    }
+
+    fn mark_unsync(&self, usn: Usn) -> core::Result<Usn> {
+        mark_sync_state(self.as_raw_handle(), false, usn)
+    }
+
     fn is_placeholder(&self) -> bool {
         match self.placeholder_state() {
             Ok(state) => state.is_some(),
@@ -203,6 +213,25 @@ pub trait FileExt: AsRawHandle {
     fn in_sync_root() -> bool {
         // TODO: this should use the uwp apis
         todo!()
+    }
+}
+
+fn mark_sync_state(handle: RawHandle, sync: bool, usn: Usn) -> core::Result<Usn> {
+    // TODO: docs say the usn NEEDS to be a null pointer? Why? Is it not supported?
+    // https://docs.microsoft.com/en-us/windows/win32/api/cfapi/nf-cfapi-cfsetinsyncstate
+    let mut usn = usn as i64;
+    unsafe {
+        CfSetInSyncState(
+            HANDLE(handle as isize),
+            if sync {
+                CloudFilters::CF_IN_SYNC_STATE_IN_SYNC
+            } else {
+                CloudFilters::CF_IN_SYNC_STATE_NOT_IN_SYNC
+            },
+            CloudFilters::CF_SET_IN_SYNC_FLAG_NONE,
+            &mut usn as *mut _,
+        )
+        .map(|_| usn as u64)
     }
 }
 
@@ -260,7 +289,7 @@ impl SyncRootInfo {
         unsafe { &*self.info }.PopulationPolicy.Primary.into()
     }
 
-    pub fn in_sync_policy(&self) -> InSyncPolicy {
+    pub fn supported_attributes(&self) -> SupportedAttributes {
         unsafe { &*self.info }.InSyncPolicy.into()
     }
 
@@ -377,22 +406,18 @@ impl From<CF_PIN_STATE> for PinState {
 pub struct PinOptions(CF_SET_PIN_FLAGS);
 
 impl PinOptions {
-    pub fn recurse(&mut self, yes: bool) -> &mut Self {
-        set_flag(&mut self.0, CloudFilters::CF_SET_PIN_FLAG_RECURSE, yes);
+    pub fn pin_descendants(&mut self) -> &mut Self {
+        self.0 |= CloudFilters::CF_SET_PIN_FLAG_RECURSE;
         self
     }
 
-    pub fn recurse_only(&mut self, yes: bool) -> &mut Self {
-        set_flag(&mut self.0, CloudFilters::CF_SET_PIN_FLAG_RECURSE_ONLY, yes);
+    pub fn pin_descendants_not_self(&mut self) -> &mut Self {
+        self.0 |= CloudFilters::CF_SET_PIN_FLAG_RECURSE_ONLY;
         self
     }
 
-    pub fn stop_on_error(&mut self, yes: bool) -> &mut Self {
-        set_flag(
-            &mut self.0,
-            CloudFilters::CF_SET_PIN_FLAG_RECURSE_STOP_ON_ERROR,
-            yes,
-        );
+    pub fn stop_on_error(&mut self) -> &mut Self {
+        self.0 |= CloudFilters::CF_SET_PIN_FLAG_RECURSE_STOP_ON_ERROR;
         self
     }
 }
@@ -410,32 +435,20 @@ pub struct ConvertOptions<'a> {
 }
 
 impl<'a> ConvertOptions<'a> {
-    pub fn mark_in_sync(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.flags,
-            CloudFilters::CF_CONVERT_FLAG_MARK_IN_SYNC,
-            yes,
-        );
+    pub fn mark_sync(mut self) -> Self {
+        self.flags |= CloudFilters::CF_CONVERT_FLAG_MARK_IN_SYNC;
         self
     }
 
     // can only be called for files
-    pub fn dehydrate(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.flags,
-            CloudFilters::CF_CONVERT_FLAG_DEHYDRATE,
-            yes,
-        );
+    pub fn dehydrate(mut self) -> Self {
+        self.flags |= CloudFilters::CF_CONVERT_FLAG_DEHYDRATE;
         self
     }
 
     // can only be called for directories
-    pub fn on_demand_population(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.flags,
-            CloudFilters::CF_CONVERT_FLAG_ENABLE_ON_DEMAND_POPULATION,
-            yes,
-        );
+    pub fn children_not_present(mut self) -> Self {
+        self.flags |= CloudFilters::CF_CONVERT_FLAG_ENABLE_ON_DEMAND_POPULATION;
         self
     }
 
@@ -450,12 +463,15 @@ impl<'a> ConvertOptions<'a> {
         self
     }
 
-    // pub fn always_full(mut self, yes: bool) -> Self {
-    //     set_flag(&mut self.flags, CloudFilters::CF_CONVERT_FLAG_ALWAYS_FULL, yes);
+    // TODO: missing docs CF_CONVERT_FLAGS
+    // https://docs.microsoft.com/en-us/answers/questions/749972/missing-documentation-in-cf-convert-flags-cfapi.html
+
+    // pub fn always_full(mut self) -> Self {
+    //     self.flags |= CloudFilters::CF_CONVERT_FLAG_ALWAYS_FULL;
     //     self
     // }
 
-    // pub fn convert_to_cloud_file(mut self, yes: bool) -> Self {
+    // pub fn convert_to_cloud_file(mut self) -> Self {
     //     set_flag(
     //         &mut self.flags,
     //         CloudFilters::CF_CONVERT_FLAG_FORCE_CONVERT_TO_CLOUD_FILE,
@@ -479,7 +495,6 @@ pub struct UpdateOptions<'a> {
     metadata: Option<Metadata>,
     dehydrate_range: Vec<CF_FILE_RANGE>,
     flags: CF_UPDATE_FLAGS,
-    usn: Option<u64>,
     blob: Option<&'a [u8]>,
 }
 
@@ -501,89 +516,54 @@ impl<'a> UpdateOptions<'a> {
     }
 
     #[must_use]
-    pub fn usn(mut self, usn: u64) -> Self {
-        self.usn = Some(usn);
+    pub fn update_if_synced(mut self) -> Self {
+        self.flags |= CloudFilters::CF_UPDATE_FLAG_VERIFY_IN_SYNC;
         self
     }
 
     #[must_use]
-    pub fn verify_in_sync(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.flags,
-            CloudFilters::CF_UPDATE_FLAG_VERIFY_IN_SYNC,
-            yes,
-        );
-        self
-    }
-
-    #[must_use]
-    pub fn mark_in_sync(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.flags,
-            CloudFilters::CF_UPDATE_FLAG_MARK_IN_SYNC,
-            yes,
-        );
+    pub fn mark_sync(mut self) -> Self {
+        self.flags |= CloudFilters::CF_UPDATE_FLAG_MARK_IN_SYNC;
         self
     }
 
     // files only
     #[must_use]
-    pub fn dehydrate(mut self, yes: bool) -> Self {
-        set_flag(&mut self.flags, CloudFilters::CF_UPDATE_FLAG_DEHYDRATE, yes);
+    pub fn dehydrate(mut self) -> Self {
+        self.flags |= CloudFilters::CF_UPDATE_FLAG_DEHYDRATE;
         self
     }
 
     // directories only
     #[must_use]
-    pub fn on_demand_population(mut self, yes: bool) -> Self {
-        if yes {
-            self.flags |= CloudFilters::CF_UPDATE_FLAG_ENABLE_ON_DEMAND_POPULATION;
-            self.flags &= !CloudFilters::CF_UPDATE_FLAG_DISABLE_ON_DEMAND_POPULATION;
-        } else {
-            self.flags |= CloudFilters::CF_UPDATE_FLAG_DISABLE_ON_DEMAND_POPULATION;
-            self.flags &= !CloudFilters::CF_UPDATE_FLAG_ENABLE_ON_DEMAND_POPULATION;
-        }
-
+    pub fn children_present(mut self) -> Self {
+        self.flags |= CloudFilters::CF_UPDATE_FLAG_DISABLE_ON_DEMAND_POPULATION;
         self
     }
 
     #[must_use]
-    pub fn remove_file_identity(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.flags,
-            CloudFilters::CF_UPDATE_FLAG_REMOVE_FILE_IDENTITY,
-            yes,
-        );
+    pub fn remove_blob(mut self) -> Self {
+        self.flags |= CloudFilters::CF_UPDATE_FLAG_REMOVE_FILE_IDENTITY;
         self
     }
 
     #[must_use]
-    pub fn clear_in_sync(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.flags,
-            CloudFilters::CF_UPDATE_FLAG_CLEAR_IN_SYNC,
-            yes,
-        );
+    pub fn mark_unsync(mut self) -> Self {
+        self.flags |= CloudFilters::CF_UPDATE_FLAG_CLEAR_IN_SYNC;
         self
     }
 
+    // TODO: what does this do?
     #[must_use]
-    pub fn remove_property(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.flags,
-            CloudFilters::CF_UPDATE_FLAG_REMOVE_PROPERTY,
-            yes,
-        );
+    pub fn remove_properties(mut self) -> Self {
+        self.flags |= CloudFilters::CF_UPDATE_FLAG_REMOVE_PROPERTY;
         self
     }
 
+    // TODO: this doesn't seem necessary
     #[must_use]
-    pub fn passthrough_fs_metadata(mut self, yes: bool) -> Self {
-        set_flag(
-            &mut self.flags,
-            CloudFilters::CF_UPDATE_FLAG_PASSTHROUGH_FS_METADATA,
-            yes,
-        );
+    pub fn skip_0_metadata_fields(mut self) -> Self {
+        self.flags |= CloudFilters::CF_UPDATE_FLAG_PASSTHROUGH_FS_METADATA;
         self
     }
 
@@ -605,8 +585,8 @@ impl Default for UpdateOptions<'_> {
         Self {
             metadata: None,
             dehydrate_range: Vec::new(),
-            flags: CloudFilters::CF_UPDATE_FLAG_NONE,
-            usn: None,
+            flags: CloudFilters::CF_UPDATE_FLAG_NONE
+                | CloudFilters::CF_UPDATE_FLAG_ENABLE_ON_DEMAND_POPULATION,
             blob: None,
         }
     }

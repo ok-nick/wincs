@@ -14,9 +14,11 @@ use windows::{
 };
 
 use crate::{
-    command::{execute, Command, Fallible},
+    command::executor::{execute, Command, Fallible},
     error::CloudErrorKind,
     placeholder_file::{Metadata, PlaceholderFile},
+    request::{RawConnectionKey, RawTransferKey},
+    usn::Usn,
 };
 
 #[derive(Debug, Default)]
@@ -78,8 +80,8 @@ impl Command for Write<'_> {
 
 impl Fallible for Write<'_> {
     fn fail(
-        connection_key: isize,
-        transfer_key: i64,
+        connection_key: RawConnectionKey,
+        transfer_key: RawTransferKey,
         error_kind: CloudErrorKind,
     ) -> core::Result<Self::Result> {
         execute::<Self>(
@@ -102,7 +104,7 @@ impl Fallible for Write<'_> {
 
 #[derive(Debug, Clone, Default)]
 pub struct Update<'a> {
-    pub mark_in_sync: bool,
+    pub mark_sync: bool,
     pub metadata: Option<Metadata>,
     pub blob: Option<&'a [u8]>,
 }
@@ -118,7 +120,7 @@ impl Command for Update<'_> {
     fn build(&self) -> CF_OPERATION_PARAMETERS_0 {
         CF_OPERATION_PARAMETERS_0 {
             RestartHydration: CF_OPERATION_PARAMETERS_0_4 {
-                Flags: if self.mark_in_sync {
+                Flags: if self.mark_sync {
                     CloudFilters::CF_OPERATION_RESTART_HYDRATION_FLAG_MARK_IN_SYNC
                 } else {
                     CloudFilters::CF_OPERATION_RESTART_HYDRATION_FLAG_NONE
@@ -137,14 +139,14 @@ impl Command for Update<'_> {
 
 #[derive(Debug, Clone, Default)]
 pub struct CreatePlaceholders<'a> {
-    pub placeholders: &'a [PlaceholderFile],
+    pub placeholders: &'a [PlaceholderFile<'a>],
     pub total: u64,
 }
 
 impl Command for CreatePlaceholders<'_> {
     const OPERATION: CF_OPERATION_TYPE = CloudFilters::CF_OPERATION_TYPE_TRANSFER_PLACEHOLDERS;
 
-    type Result = Vec<core::Result<u64>>;
+    type Result = Vec<core::Result<Usn>>;
     type Field = CF_OPERATION_PARAMETERS_0_7;
 
     unsafe fn result(info: CF_OPERATION_PARAMETERS_0) -> Self::Result {
@@ -159,7 +161,7 @@ impl Command for CreatePlaceholders<'_> {
             placeholder
                 .Result
                 .ok()
-                .map(|_| placeholder.CreateUsn as u64)
+                .map(|_| placeholder.CreateUsn as Usn)
         })
         .collect()
     }
@@ -180,8 +182,8 @@ impl Command for CreatePlaceholders<'_> {
 
 impl<'a> Fallible for CreatePlaceholders<'a> {
     fn fail(
-        connection_key: isize,
-        transfer_key: i64,
+        connection_key: RawConnectionKey,
+        transfer_key: RawTransferKey,
         error_kind: CloudErrorKind,
     ) -> core::Result<Self::Result> {
         execute::<Self>(
@@ -229,8 +231,8 @@ impl Command for Validate {
 
 impl Fallible for Validate {
     fn fail(
-        connection_key: isize,
-        transfer_key: i64,
+        connection_key: RawConnectionKey,
+        transfer_key: RawTransferKey,
         error_kind: CloudErrorKind,
     ) -> core::Result<Self::Result> {
         execute::<Self>(
@@ -277,8 +279,8 @@ impl Command for Dehydrate<'_> {
 
 impl Fallible for Dehydrate<'_> {
     fn fail(
-        connection_key: isize,
-        transfer_key: i64,
+        connection_key: RawConnectionKey,
+        transfer_key: RawTransferKey,
         error_kind: CloudErrorKind,
     ) -> core::Result<Self::Result> {
         execute::<Self>(
@@ -319,8 +321,8 @@ impl Command for Delete {
 
 impl Fallible for Delete {
     fn fail(
-        connection_key: isize,
-        transfer_key: i64,
+        connection_key: RawConnectionKey,
+        transfer_key: RawTransferKey,
         error_kind: CloudErrorKind,
     ) -> core::Result<Self::Result> {
         execute::<Self>(
@@ -359,8 +361,8 @@ impl Command for Rename {
 
 impl Fallible for Rename {
     fn fail(
-        connection_key: isize,
-        transfer_key: i64,
+        connection_key: RawConnectionKey,
+        transfer_key: RawTransferKey,
         error_kind: CloudErrorKind,
     ) -> core::Result<Self::Result> {
         execute::<Self>(

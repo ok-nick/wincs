@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use widestring::U16String;
 use windows::{
@@ -9,28 +9,25 @@ use windows::{
     },
 };
 
-use crate::utility::hstring_from_widestring;
+use crate::utility::ToHString;
 
-pub trait PathExt {
-    // TODO: if `sync_root_info` doesn't error then this is true
+pub trait PathExt
+where
+    Self: AsRef<Path>,
+{
     fn in_sync_root(&self) -> bool {
-        todo!()
+        self.sync_root_info().is_ok()
     }
 
-    // TODO: uses `info_from_path`. This call requires a struct to be made for getters of StorageProviderSyncRootInfo
-    fn sync_root_info(&self) {
-        todo!()
+    // TODO: This call requires a struct to be made for getters of StorageProviderSyncRootInfo
+    fn sync_root_info(&self) -> core::Result<StorageProviderSyncRootInfo> {
+        StorageProviderSyncRootManager::GetSyncRootInformationForFolder(
+            StorageFolder::GetFolderFromPathAsync(
+                &U16String::from_os_str(self.as_ref().as_os_str()).to_hstring(),
+            )?
+            .get()?,
+        )
     }
 }
 
-impl PathExt for PathBuf {}
-impl PathExt for Path {}
-
-pub fn info_from_path(path: &Path) -> core::Result<StorageProviderSyncRootInfo> {
-    StorageProviderSyncRootManager::GetSyncRootInformationForFolder(
-        StorageFolder::GetFolderFromPathAsync(hstring_from_widestring(&U16String::from_os_str(
-            path.as_os_str(),
-        )))?
-        .get()?,
-    )
-}
+impl<T: AsRef<Path>> PathExt for T {}

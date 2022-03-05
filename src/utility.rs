@@ -1,18 +1,14 @@
-use std::ops::{BitAndAssign, BitOrAssign, Not};
-
 use windows::core::HSTRING;
 
-pub fn hstring_from_widestring<T: AsRef<[u16]>>(bytes: T) -> HSTRING {
-    HSTRING::from_wide(bytes.as_ref())
-}
+// TODO: add something to convert an Option<T> to a *const T and *mut T
 
-pub fn set_flag<T>(flags: &mut T, flag: T, yes: bool)
+pub trait ToHString
 where
-    T: BitOrAssign + BitAndAssign + Not<Output = T>,
+    Self: AsRef<[u16]>,
 {
-    if yes {
-        *flags |= flag;
-    } else {
-        *flags &= !flag;
+    fn to_hstring(&self) -> HSTRING {
+        HSTRING::from_wide(self.as_ref())
     }
 }
+
+impl<T: AsRef<[u16]>> ToHString for T {}

@@ -1,5 +1,4 @@
 use std::{
-    fs::File,
     io::{self, Seek, SeekFrom},
     mem::ManuallyDrop,
     path::{Path, PathBuf},
@@ -11,7 +10,7 @@ use windows::{
     core::{self, GUID},
     Win32::{
         Storage::{
-            CloudFilters::{self, CfGetTransferKey, CfReportProviderProgress, CF_CONNECTION_KEY},
+            CloudFilters::{self, CfReportProviderProgress, CF_CONNECTION_KEY},
             EnhancedStorage,
         },
         System::{
@@ -31,9 +30,9 @@ use windows::{
 };
 
 use crate::{
-    command::{commands::Read, Command, Update, Write},
-    key::{BorrowedConnectionKey, BorrowedTransferKey, OwnedTransferKey},
+    command::{Command, Read, Update, Write},
     placeholder_file::Metadata,
+    request::{RawConnectionKey, RawTransferKey},
 };
 
 // secret PKEY
@@ -48,9 +47,9 @@ const STORAGE_PROVIDER_TRANSFER_PROGRESS: PROPERTYKEY = PROPERTYKEY {
 };
 
 #[derive(Debug, Clone)]
-pub struct Placeholder<'a> {
-    connection_key: &'a BorrowedConnectionKey,
-    transfer_key: &'a BorrowedTransferKey,
+pub struct Placeholder {
+    connection_key: RawConnectionKey,
+    transfer_key: RawTransferKey,
     // TODO: take in a borrowed path
     path: PathBuf,
     // TODO: how does file size behave when writing past the last recorded file size?
@@ -58,10 +57,10 @@ pub struct Placeholder<'a> {
     position: u64,
 }
 
-impl<'a> Placeholder<'a> {
+impl Placeholder {
     pub(crate) fn new(
-        connection_key: &'a BorrowedConnectionKey,
-        transfer_key: &'a BorrowedTransferKey,
+        connection_key: RawConnectionKey,
+        transfer_key: RawTransferKey,
         path: PathBuf,
         file_size: u64,
     ) -> Self {
@@ -74,13 +73,16 @@ impl<'a> Placeholder<'a> {
         }
     }
 
-    // TODO: Is a connection key necessary?
-    // CfGetTransferKey
-    // according to this post it looks optional
-    // https://stackoverflow.com/questions/66988096/windows-10-file-cloud-sync-provider-api-transferdata-problem
-    pub fn from_file(connection_key: &'a BorrowedConnectionKey, file: File) -> core::Result<Self> {
+    // TODO: this function is a bit of a pickle
+    // if I let the user pass in the transfer key, then I somehow need to get the file path to support set_progress
+    // if I allow getting a transfer key from a path, then I somehow need to let them specify read/write access (probably?)
+    pub fn from_path<P: AsRef<Path>>(
+        connection_key: RawConnectionKey,
+        path: P,
+    ) -> core::Result<Self> {
+        // let file = File::open(path).unwrap();
         // let key = unsafe { CfGetTransferKey(HANDLE(file.as_raw_handle() as isize))?};
-        // OwnedTransferKey::new(key, file)
+        // OwnedTransferKey::new(key, file);
 
         // Ok(Self {
         //     connection_key,
@@ -90,13 +92,11 @@ impl<'a> Placeholder<'a> {
     }
 
     pub fn update(&self, options: UpdateOptions) -> core::Result<()> {
-        options
-            .0
-            .execute(*self.connection_key.key(), *self.transfer_key.key())
+        options.0.execute(self.connection_key, self.transfer_key)
     }
 
-    pub fn mark_in_sync(&self) -> core::Result<()> {
-        self.update(UpdateOptions::new().mark_in_sync(true))
+    pub fn mark_sync(&self) -> core::Result<()> {
+        self.update(UpdateOptions::new().mark_sync())
     }
 
     pub fn set_metadata(&self, metadata: Metadata) -> core::Result<()> {
@@ -110,8 +110,8 @@ impl<'a> Placeholder<'a> {
     pub fn set_progress(&self, total: u64, completed: u64) -> core::Result<()> {
         unsafe {
             CfReportProviderProgress(
-                CF_CONNECTION_KEY(*self.connection_key.key()),
-                *self.transfer_key.key(),
+                CF_CONNECTION_KEY(self.connection_key),
+                self.transfer_key,
                 total as i64,
                 completed as i64,
             )?;
@@ -152,13 +152,13 @@ impl<'a> Placeholder<'a> {
 }
 
 // TODO: does this have the same 4KiB requirement as writing?
-impl io::Read for Placeholder<'_> {
+impl io::Read for Placeholder {
     fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
         let result = Read {
             buffer,
             position: self.position,
         }
-        .execute(*self.connection_key.key(), *self.transfer_key.key());
+        .execute(self.connection_key, self.transfer_key);
 
         match result {
             Ok(bytes_read) => {
@@ -170,7 +170,7 @@ impl io::Read for Placeholder<'_> {
     }
 }
 
-impl io::Write for Placeholder<'_> {
+impl io::Write for Placeholder {
     fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
         assert!(
             buffer.len() % 4096 == 0 || self.position + buffer.len() as u64 >= self.file_size,
@@ -181,7 +181,7 @@ impl io::Write for Placeholder<'_> {
             buffer,
             position: self.position,
         }
-        .execute(*self.connection_key.key(), *self.transfer_key.key());
+        .execute(self.connection_key, self.transfer_key);
 
         match result {
             Ok(_) => {
@@ -198,7 +198,7 @@ impl io::Write for Placeholder<'_> {
 }
 
 // TODO: properly handle seeking
-impl Seek for Placeholder<'_> {
+impl Seek for Placeholder {
     fn seek(&mut self, position: SeekFrom) -> io::Result<u64> {
         self.position = match position {
             SeekFrom::Start(offset) => offset,
@@ -218,8 +218,8 @@ impl<'a> UpdateOptions<'a> {
         Self::default()
     }
 
-    pub fn mark_in_sync(mut self, yes: bool) -> Self {
-        self.0.mark_in_sync = yes;
+    pub fn mark_sync(mut self) -> Self {
+        self.0.mark_sync = true;
         self
     }
 
