@@ -5,7 +5,8 @@ use crate::{
 };
 
 pub trait SyncFilter: Send + Sync {
-    /// Callback to satisfy an I/O request, or a placeholder hydration request.
+    /// A placeholder hydration has been requested. This means that the placeholder should be
+    /// populated with its corresponding data on the remote.
     fn fetch_data(&self, _request: Request, ticket: ticket::FetchData, _info: info::FetchData) {
         #[allow(unused_must_use)]
         {
@@ -13,10 +14,16 @@ pub trait SyncFilter: Send + Sync {
         }
     }
 
-    /// Callback to cancel an ongoing placeholder hydration.
+    /// A placeholder hydration request has been cancelled.
     fn cancel_fetch_data(&self, _request: Request, _info: info::CancelFetchData) {}
 
-    /// Callback to validate placeholder data.
+    /// Followed by a successful call to `fetch_data`, this callback should verify the integrity of
+    /// the data persisted in the placeholder.
+    ///
+    /// **You** are responsible for validating the data in the placeholder. To approve or
+    /// disapprove the request, use the ticket provided.
+    ///
+    /// Note that this callback is only called if `validation_required` is specified.
     fn validate_data(
         &self,
         _request: Request,
@@ -29,7 +36,8 @@ pub trait SyncFilter: Send + Sync {
         }
     }
 
-    /// Callback to request information about the contents of placeholder files.
+    /// A directory population has been requested. The behavior of this callback is dependent on
+    /// the `PopulationType` specified during registration.
     fn fetch_placeholders(
         &self,
         _request: Request,
@@ -42,20 +50,22 @@ pub trait SyncFilter: Send + Sync {
         }
     }
 
-    /// Callback to cancel a request for the contents of placeholder files.
+    /// A directory population request has been cancelled.
     fn cancel_fetch_placeholders(&self, _request: Request, _info: info::CancelFetchPlaceholders) {}
 
-    /// Callback to inform the sync provider that a placeholder under one of its
-    /// sync roots has been successfully opened for read/write/delete access.
+    /// A placeholder file handle has been opened for read, write, and/or delete
+    /// access.
     fn opened(&self, _request: Request, _info: info::Opened) {}
 
-    /// Callback to inform the sync provider that a placeholder under one of its
-    /// sync roots that has been previously opened for read/write/delete access
-    /// is now closed.
+    /// A placeholder file handle that has been previously opened with read, write,
+    /// and/or delete access has been closed.
     fn closed(&self, _request: Request, _info: info::Closed) {}
 
-    /// Callback to inform the sync provider that a placeholder under one of its
-    /// sync roots is about to be dehydrated.
+    /// A placeholder dehydration has been requested. This means that all of the data persisted in
+    /// the file will be __completely__ discarded.
+    ///
+    /// The operating system will handle dehydrating placeholder files automatically. However, it
+    /// is up to **you** to approve this. Use the ticket to approve or disapprove the request.
     fn dehydrate(&self, _request: Request, ticket: ticket::Dehydrate, _info: info::Dehydrate) {
         #[allow(unused_must_use)]
         {
@@ -63,10 +73,13 @@ pub trait SyncFilter: Send + Sync {
         }
     }
 
+    /// A placeholder dehydration request has been cancelled.
     fn dehydrated(&self, _request: Request, _info: info::Dehydrated) {}
 
-    /// Callback to inform the sync provider that a placeholder under one of its
-    /// sync roots is about to be deleted.
+    /// A placeholder file is about to be deleted.
+    ///
+    /// The operating system will handle deleting placeholder files automatically. However, it is
+    /// up to **you** to approve this. Use the ticket to approve or disapprove the request.
     fn delete(&self, _request: Request, ticket: ticket::Delete, _info: info::Delete) {
         #[allow(unused_must_use)]
         {
@@ -74,10 +87,16 @@ pub trait SyncFilter: Send + Sync {
         }
     }
 
+    /// A placeholder file has been deleted.
     fn deleted(&self, _request: Request, _info: info::Deleted) {}
 
-    /// Callback to inform the sync provider that a placeholder under one of its
-    /// sync roots is about to be renamed or moved.
+    /// A placeholder file is about to be renamed or moved.
+    ///
+    /// The operating system will handle moving and renaming placeholder files automatically.
+    /// However, it is up to **you** to approve this. Use the ticket to approve or disapprove the
+    /// request.
+    ///
+    /// When the operation is completed, the `renamed` callback will be called.
     fn rename(&self, _request: Request, ticket: ticket::Rename, _info: info::Rename) {
         #[allow(unused_must_use)]
         {
@@ -85,5 +104,6 @@ pub trait SyncFilter: Send + Sync {
         }
     }
 
+    /// A placeholder file has been renamed or moved.
     fn renamed(&self, _request: Request, _info: info::Renamed) {}
 }
