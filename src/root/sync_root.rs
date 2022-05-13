@@ -14,11 +14,14 @@ use windows::{
 
 use crate::ext::PathExt;
 
+/// Returns a list of active sync roots.
 pub fn active_roots() {
     // GetCurrentSyncRoots()
     todo!()
 }
 
+/// Returns whether or not the Cloud Filter API is supported (or at least the UWP part of it, for
+/// now).
 pub fn is_supported() -> core::Result<bool> {
     // TODO: Check current windows version to see if this function is supported before calling it
     StorageProviderSyncRootManager::IsSupported()
@@ -90,21 +93,6 @@ impl SyncRoot {
         &self.account_name
     }
 
-    pub fn is_registered(&self) -> core::Result<bool> {
-        Ok(
-            match StorageProviderSyncRootManager::GetSyncRootInformationForId(
-                &self.to_id().into_inner(),
-            ) {
-                Ok(_) => true,
-                Err(err) => err.win32_error() != Some(Foundation::ERROR_NOT_FOUND),
-            },
-        )
-    }
-
-    pub fn unregister(&self) -> core::Result<()> {
-        StorageProviderSyncRootManager::Unregister(&self.to_id().into_inner())
-    }
-
     pub fn to_id(&self) -> SyncRootId {
         SyncRootId(HSTRING::from_wide(
             &[
@@ -151,6 +139,23 @@ impl SyncRootId {
         Ok(Self(path.as_ref().sync_root_info()?.Id()?))
     }
 
+    pub fn is_registered(&self) -> core::Result<bool> {
+        Ok(
+            match StorageProviderSyncRootManager::GetSyncRootInformationForId(&self.0) {
+                Ok(_) => true,
+                Err(err) => err.win32_error() != Some(Foundation::ERROR_NOT_FOUND),
+            },
+        )
+    }
+
+    pub fn unregister(&self) -> core::Result<()> {
+        StorageProviderSyncRootManager::Unregister(&self.0)
+    }
+
+    pub fn as_u16str(&self) -> &U16Str {
+        U16Str::from_slice(self.0.as_wide())
+    }
+
     // splits up a sync root id into its three components according to the specification,
     // https://docs.microsoft.com/en-us/uwp/api/windows.storage.provider.storageprovidersyncrootinfo.id?view=winrt-22000#windows-storage-provider-storageprovidersyncrootinfo-id
     // provider-id!security-id!account-name
@@ -173,10 +178,6 @@ impl SyncRootId {
         }
 
         (components[0], components[1], components[2])
-    }
-
-    pub fn as_u16str(&self) -> &U16Str {
-        U16Str::from_slice(self.0.as_wide())
     }
 
     pub fn to_sync_root(&self) -> SyncRoot {

@@ -20,20 +20,29 @@ use crate::{
     root::session::Session,
 };
 
+/// A builder to create a new connection for the sync root at the specified path.
 #[derive(Debug, Clone, Copy)]
 pub struct Connection(CF_CONNECT_FLAGS);
 
 impl Connection {
+    /// Create a new `Connection`.
     pub fn new() -> Self {
         Self::default()
     }
 
+    // TODO: what specifically causes an implicit hydration?
+    /// The `block_implicit_hydration` flag will prevent implicit placeholder hydrations from
+    /// invoking the `fetch_data` callback of a `SyncFilter`. This could occur when an anti-virus
+    /// is scanning file system activity on files within the sync root.
+    ///
+    /// A call to `hydrate` from the `FileExt` trait will not be blocked by this flag.
     #[must_use]
     pub fn block_implicit_hydration(mut self) -> Self {
         self.0 |= CloudFilters::CF_CONNECT_FLAG_BLOCK_SELF_IMPLICIT_HYDRATION;
         self
     }
 
+    /// Initiates a connection to the sync root with the given `SyncFilter`.
     pub fn connect<P, T>(self, path: P, filter: T) -> core::Result<Session<Arc<T>>>
     where
         P: AsRef<Path>,
