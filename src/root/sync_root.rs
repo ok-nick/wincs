@@ -27,15 +27,20 @@ pub fn is_supported() -> core::Result<bool> {
     StorageProviderSyncRootManager::IsSupported()
 }
 
+/// A builder to construct a `SyncRootId`.
 #[derive(Debug, Clone)]
-pub struct SyncRootBuilder {
+pub struct SyncRootIdBuilder {
     provider_name: U16String,
     user_security_id: SecurityId,
     account_name: U16String,
 }
 
-impl SyncRootBuilder {
+impl SyncRootIdBuilder {
+    /// Create a new builder with the given provider name.
+    ///
+    /// The provider name MUST NOT contain exclamation points, and it must be within (255)[] characters.
     pub fn new(provider_name: U16String) -> Self {
+        // TODO: assert that is doesn't have exclamation points
         assert!(
             provider_name.len() <= CloudFilters::CF_MAX_PROVIDER_NAME_LENGTH as usize,
             "provider name must not exceed {} characters, got {} characters",
@@ -50,50 +55,25 @@ impl SyncRootBuilder {
         }
     }
 
+    /// The security id of the Windows user. Retrieve this value via the `SecurityId` struct.
+    ///
+    /// By default, a sync root registered without a user security id will be installed globally.
     pub fn user_security_id(&mut self, security_id: SecurityId) -> &mut Self {
         self.user_security_id = security_id;
         self
     }
 
+    /// The name of the user's account.
+    ///
+    /// This value does not have any actual meaning and it could theoretically be anything.
+    /// However, it is encouraged to set this value to the account name of the user on the remote.
     pub fn account_name(&mut self, account_name: U16String) -> &mut Self {
         self.account_name = account_name;
         self
     }
 
-    pub fn build(self) -> SyncRoot {
-        SyncRoot {
-            provider_name: self.provider_name,
-            user_security_id: self.user_security_id,
-            account_name: self.account_name,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct SyncRoot {
-    provider_name: U16String,
-    user_security_id: SecurityId,
-    account_name: U16String,
-}
-
-impl SyncRoot {
-    pub fn builder(provider_name: U16String) -> SyncRootBuilder {
-        SyncRootBuilder::new(provider_name)
-    }
-
-    pub fn provider_name(&self) -> &U16Str {
-        &self.provider_name
-    }
-
-    pub fn user_security_id(&self) -> &SecurityId {
-        &self.user_security_id
-    }
-
-    pub fn account_name(&self) -> &U16Str {
-        &self.account_name
-    }
-
-    pub fn to_id(&self) -> SyncRootId {
+    /// Constructs a `SyncRootId` from the builder.
+    pub fn build(self) -> SyncRootId {
         SyncRootId(HSTRING::from_wide(
             &[
                 self.provider_name.as_slice(),
@@ -105,6 +85,12 @@ impl SyncRoot {
     }
 }
 
+/// The identifier for a sync root.
+///
+/// The inner value comes in the form:
+/// provider-id!security-id!account-name
+/// as specified
+/// [here](https://docs.microsoft.com/en-us/uwp/api/windows.storage.provider.storageprovidersyncrootinfo.id?view=winrt-22000#property-value).;
 // an HSTRING is reference counted, it is safe to clone
 #[derive(Debug, Clone)]
 pub struct SyncRootId(HSTRING);
@@ -114,31 +100,13 @@ impl SyncRootId {
     // unicode exclamation point as told in the specification above
     const SEPARATOR: u16 = 0x21;
 
-    // the extra check doesn't always mean the id is valid, if exclamation points are misplaced
-    // then an error would occur down the line
+    /// Creates a `SyncRootId` from the sync root at the given path.
     pub fn from_path<P: AsRef<Path>>(path: P) -> core::Result<Self> {
-        let id = path.as_ref().sync_root_info()?.Id()?;
-
-        // TODO: A valid ID would have more restrictions, like 255 (+ null) limit for provider-id,
-        // and 255 (+ null) limit for security ids
-        let excl_points = id
-            .as_wide()
-            .iter()
-            .filter(|&&byte| byte == Self::SEPARATOR)
-            .count();
-        assert!(
-            excl_points >= 2,
-            "malformed sync root id, missing {} component(s)",
-            excl_points + 1
-        );
-
-        Self::from_path_unchecked(path)
-    }
-
-    pub fn from_path_unchecked<P: AsRef<Path>>(path: P) -> core::Result<Self> {
+        // if the id is coming from a sync root, then it must be valid
         Ok(Self(path.as_ref().sync_root_info()?.Id()?))
     }
 
+    /// Whether or not the `SyncRootId` has already been registered.
     pub fn is_registered(&self) -> core::Result<bool> {
         Ok(
             match StorageProviderSyncRootManager::GetSyncRootInformationForId(&self.0) {
@@ -148,17 +116,25 @@ impl SyncRootId {
         )
     }
 
+    /// Unregisters the sync root at the current `SyncRootId` if it exists.
     pub fn unregister(&self) -> core::Result<()> {
         StorageProviderSyncRootManager::Unregister(&self.0)
     }
 
+    /// A reference to the `SyncRootId` as a 16 bit string. 
     pub fn as_u16str(&self) -> &U16Str {
         U16Str::from_slice(self.0.as_wide())
     }
 
-    // splits up a sync root id into its three components according to the specification,
-    // https://docs.microsoft.com/en-us/uwp/api/windows.storage.provider.storageprovidersyncrootinfo.id?view=winrt-22000#windows-storage-provider-storageprovidersyncrootinfo-id
-    // provider-id!security-id!account-name
+    /// A reference to the `SyncRootId` as an `HSTRING` (its inner value).
+    pub fn as_hstring(&self) -> &HSTRING {
+        &self.0
+    }
+
+    /// The three components of a `SyncRootId` as described by the specification.
+    ///
+    /// The order goes as follows:
+    /// (provider-id, security-id, account-name)
     // TODO: This doesn't work properly, it forgets to include the account name
     pub fn to_components(&self) -> (&U16Str, &U16Str, &U16Str) {
         let mut components = Vec::with_capacity(3);
@@ -179,21 +155,9 @@ impl SyncRootId {
 
         (components[0], components[1], components[2])
     }
-
-    pub fn to_sync_root(&self) -> SyncRoot {
-        let id = self.to_components();
-        SyncRoot {
-            provider_name: id.0.to_owned(),
-            user_security_id: SecurityId::new_unchecked(id.1.to_owned()),
-            account_name: id.2.to_owned(),
-        }
-    }
-
-    pub(crate) fn into_inner(self) -> HSTRING {
-        self.0
-    }
 }
 
+/// A user security id (SID).
 #[derive(Debug, Clone)]
 pub struct SecurityId(U16String);
 
@@ -201,10 +165,12 @@ impl SecurityId {
     // https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getcurrentthreadeffectivetoken
     const CURRENT_THREAD_EFFECTIVE_TOKEN: HANDLE = HANDLE(-6);
 
+    /// Creates a new `SecurityId` without any assertions.
     pub fn new_unchecked(id: U16String) -> Self {
         Self(id)
     }
 
+    /// The `SecurityId` for the logged in user.
     pub fn current_user() -> core::Result<Self> {
         unsafe {
             let mut token_size = 0;
