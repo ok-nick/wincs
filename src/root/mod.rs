@@ -10,5 +10,5 @@ pub use register::{
 };
 pub use session::Session;
 pub use sync_root::{
-    active_roots, is_supported, SecurityId, SyncRoot, SyncRootBuilder, SyncRootId,
+    active_roots, is_supported, SecurityId, SyncRootIdBuilder, SyncRootId,
 };

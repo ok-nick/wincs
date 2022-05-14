@@ -21,15 +21,15 @@ use windows::{
     },
 };
 
-use crate::{utility::ToHString, SyncRoot};
+use crate::{utility::ToHString, SyncRootId};
 
 #[derive(Debug, Clone)]
 pub struct Registration<'a> {
-    sync_root: &'a SyncRoot,
+    sync_root_id: &'a SyncRootId,
     show_siblings_as_group: bool,
     allow_pinning: bool,
     allow_hardlinks: bool,
-    display_name: Option<&'a U16Str>,
+    display_name: &'a U16Str,
     recycle_bin_uri: Option<&'a U16Str>,
     version: Option<&'a U16Str>,
     hydration_type: HydrationType,
@@ -43,10 +43,10 @@ pub struct Registration<'a> {
 }
 
 impl<'a> Registration<'a> {
-    pub fn from_sync_root(sync_root: &'a SyncRoot) -> Self {
+    pub fn from_sync_root_id(sync_root_id: &'a SyncRootId) -> Self {
         Self {
-            sync_root,
-            display_name: None,
+            sync_root_id,
+            display_name: sync_root_id.as_u16str(), 
             recycle_bin_uri: None,
             show_siblings_as_group: false,
             allow_pinning: false,
@@ -81,10 +81,10 @@ impl<'a> Registration<'a> {
         self
     }
 
-    // I made this default to provider_name since it is required for a sync engine to be registered
+    // This field is required
     #[must_use]
     pub fn display_name(mut self, display_name: &'a U16Str) -> Self {
-        self.display_name = Some(display_name);
+        self.display_name = display_name;
         self
     }
 
@@ -166,11 +166,7 @@ impl<'a> Registration<'a> {
         info.SetHydrationPolicyModifier(self.hydration_policy.0)?;
         info.SetPopulationPolicy(self.population_type.into())?;
         info.SetInSyncPolicy(self.supported_attributes.0)?;
-        info.SetDisplayNameResource(
-            self.display_name
-                .unwrap_or_else(|| self.sync_root.provider_name())
-                .to_hstring(),
-        )?;
+        info.SetDisplayNameResource(self.display_name.to_hstring())?;
         info.SetIconResource(self.icon.to_hstring())?;
         info.SetPath(
             StorageFolder::GetFolderFromPathAsync(
@@ -183,7 +179,7 @@ impl<'a> Registration<'a> {
         } else {
             StorageProviderHardlinkPolicy::None
         })?;
-        info.SetId(&self.sync_root.to_id().into_inner())?;
+        info.SetId(self.sync_root_id.as_hstring())?;
 
         if let Some(provider_id) = self.provider_id {
             info.SetProviderId(provider_id)?;
