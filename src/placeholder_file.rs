@@ -33,7 +33,6 @@ impl<'a> PlaceholderFile<'a> {
     /// `SyncFilter::fetch_placeholders` from being called for this placeholder.
     ///
     /// Only applicable to placeholder directories.
-
     pub fn has_no_children(mut self) -> Self {
         self.0.Flags |= CloudFilters::CF_PLACEHOLDER_CREATE_FLAG_DISABLE_ON_DEMAND_POPULATION;
         self
