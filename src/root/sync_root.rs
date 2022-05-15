@@ -91,7 +91,8 @@ impl SyncRootIdBuilder {
 /// provider-id!security-id!account-name
 /// as specified
 /// [here](https://docs.microsoft.com/en-us/uwp/api/windows.storage.provider.storageprovidersyncrootinfo.id?view=winrt-22000#property-value).;
-// an HSTRING is reference counted, it is safe to clone
+///
+/// A `SyncRootId` stores an inner, reference counted `HSTRING`, making this struct cheap to clone.
 #[derive(Debug, Clone)]
 pub struct SyncRootId(HSTRING);
 
@@ -121,7 +122,7 @@ impl SyncRootId {
         StorageProviderSyncRootManager::Unregister(&self.0)
     }
 
-    /// A reference to the `SyncRootId` as a 16 bit string. 
+    /// A reference to the `SyncRootId` as a 16 bit string.
     pub fn as_u16str(&self) -> &U16Str {
         U16Str::from_slice(self.0.as_wide())
     }

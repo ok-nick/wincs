@@ -182,6 +182,8 @@ impl Request {
     /// the current placeholder directory. If this value is unknown or is the length of the passed
     /// slice, consider calling the `create_placeholders` method.
     ///
+    /// This method is equivalent to calling `CreatePlaceholders::execute`.
+    ///
     /// This function will fail if the placeholder associated with the current callback is not a
     /// directory. Use the `path` method to identify if the placeholder is a directory.
     pub fn create_placeholders_with_total(
@@ -222,7 +224,7 @@ impl Process {
     }
 
     // TODO: command_line and session_id are valid only in versions 1803+
-    // https://docs.microsoft.com/en-us/windows/win32/api/cfapi/ns-cfapi-cf_process_info#sessionid
+    // https://docs.microsoft.com/en-us/windows/win32/api/cfapi/ns-cfapi-cf_process_infoessionid
     /// The exact command used to initialize the user process.
     pub fn command_line(&self) -> &U16CStr {
         unsafe { U16CStr::from_ptr_str(self.0.CommandLine.0) }
