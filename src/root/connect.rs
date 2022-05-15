@@ -36,7 +36,6 @@ impl Connection {
     /// is scanning file system activity on files within the sync root.
     ///
     /// A call to `hydrate` from the `FileExt` trait will not be blocked by this flag.
-
     pub fn block_implicit_hydration(mut self) -> Self {
         self.0 |= CloudFilters::CF_CONNECT_FLAG_BLOCK_SELF_IMPLICIT_HYDRATION;
         self
