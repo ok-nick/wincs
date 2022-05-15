@@ -9,6 +9,4 @@ pub use register::{
     SupportedAttributes,
 };
 pub use session::Session;
-pub use sync_root::{
-    active_roots, is_supported, SecurityId, SyncRootIdBuilder, SyncRootId,
-};
+pub use sync_root::{active_roots, is_supported, SecurityId, SyncRootId, SyncRootIdBuilder};

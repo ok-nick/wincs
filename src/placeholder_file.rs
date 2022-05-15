@@ -16,33 +16,67 @@ use windows::{
 
 use crate::usn::Usn;
 
+// TODO: this struct could probably have a better name to represent files/dirs
+/// A builder for creating new placeholder files/directories.
 #[derive(Debug)]
 pub struct PlaceholderFile<'a>(CF_PLACEHOLDER_CREATE_INFO, PhantomData<&'a ()>);
 
 impl<'a> PlaceholderFile<'a> {
+    /// Creates a new `PlaceholderFile`.
     pub fn new() -> Self {
         Self::default()
     }
 
-    #[must_use]
-    pub fn children_present(mut self) -> Self {
+    /// Marks this `PlaceholderFile` as having no children placeholders on creation.
+    ///
+    /// If `PopulationType::Full` is specified on registration, this flag will prevent
+    /// `SyncFilter::fetch_placeholders` from being called for this placeholder.
+    ///
+    /// Only applicable to placeholder directories.
+
+    pub fn has_no_children(mut self) -> Self {
         self.0.Flags |= CloudFilters::CF_PLACEHOLDER_CREATE_FLAG_DISABLE_ON_DEMAND_POPULATION;
         self
     }
 
-    #[must_use]
+    /// Marks the `PlaceholderFile` as synced.
+    ///
+    /// This flag is used to determine the status of a placeholder shown in the file explorer. It
+    /// is applicable to both files and directories.
+    ///
+    /// A file or directory should be marked as "synced" when it has all of its data and metadata.
+    /// A file that is partially full could still be marked as synced, any remaining data will
+    /// invoke the `SyncFilter::fetch_data` callback automatically if requested.
     pub fn mark_sync(mut self) -> Self {
         self.0.Flags |= CloudFilters::CF_PLACEHOLDER_CREATE_FLAG_MARK_IN_SYNC;
         self
     }
 
-    #[must_use]
+    /// Whether or not to overwrite an existing placeholder.
+    pub fn overwrite(mut self) -> Self {
+        self.0.Flags |= CloudFilters::CF_PLACEHOLDER_CREATE_FLAG_SUPERSEDE;
+        self
+    }
+
+    /// Blocks this placeholder file from being dehydrated.
+    ///
+    /// This flag does not work on directories.
+    pub fn block_dehydration(mut self) -> Self {
+        self.0.Flags |= CloudFilters::CF_PLACEHOLDER_CREATE_FLAG_ALWAYS_FULL;
+        self
+    }
+
+    /// The metadata for the `PlaceholderFile`.
     pub fn metadata(mut self, metadata: Metadata) -> Self {
         self.0.FsMetadata = metadata.0;
         self
     }
 
-    #[must_use]
+    /// A buffer of bytes stored with the file that could be accessed through a
+    /// `Request::file_blob` or `FileExit::placeholder_info`.
+    ///
+    /// The buffer must not exceed
+    /// [4KiB](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Storage/CloudFilters/constant.CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH.html).
     pub fn blob(mut self, blob: &'a [u8]) -> Self {
         assert!(
             blob.len() <= CloudFilters::CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH as usize,
@@ -56,6 +90,15 @@ impl<'a> PlaceholderFile<'a> {
         self
     }
 
+    /// Creates a placeholder file/directory on the file system.
+    ///
+    /// The value returned is the final `Usn` after the placeholder is created.
+    ///
+    /// It is recommended to use this function over `FileExt::to_placeholder` for efficiency
+    /// purposes. If you need to create multiple placeholders, consider using `BatchCreate`.
+    ///
+    /// If you need to create placeholders from a callback, do not use this method. Use the
+    /// `Request::create_placeholder` methods of a `Request`.
     pub fn create<P: AsRef<Path>>(mut self, path: P) -> core::Result<Usn> {
         let path = path.as_ref();
 
@@ -97,6 +140,7 @@ impl Default for PlaceholderFile<'_> {
 }
 
 pub trait BatchCreate {
+    /// Creates multiple placeholder file/directories within the given path.
     fn create<P: AsRef<Path>>(&mut self, path: P) -> core::Result<Vec<core::Result<Usn>>>;
 }
 
@@ -125,45 +169,48 @@ impl BatchCreate for [PlaceholderFile<'_>] {
     }
 }
 
+/// The metadata for a `PlaceholderFile`.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Metadata(pub(crate) CF_FS_METADATA);
 
 impl Metadata {
+    /// Creates a new `Metadata`.
     pub fn new() -> Self {
         Self::default()
     }
 
-    #[must_use]
+    /// The time the file/directory was created.
     pub fn creation_time(mut self, time: u64) -> Self {
         self.0.BasicInfo.CreationTime = time as i64;
         self
     }
 
-    #[must_use]
+    /// The time the file/directory was last accessed.
     pub fn last_access_time(mut self, time: u64) -> Self {
         self.0.BasicInfo.LastAccessTime = time as i64;
         self
     }
 
-    #[must_use]
+    /// The time the file/directory content was last written.
     pub fn last_write_time(mut self, time: u64) -> Self {
         self.0.BasicInfo.LastWriteTime = time as i64;
         self
     }
 
-    #[must_use]
+    /// The time the file/directory content or metadata was changed.
     pub fn change_time(mut self, time: u64) -> Self {
         self.0.BasicInfo.ChangeTime = time as i64;
         self
     }
 
-    #[must_use]
+    /// The size of the file's content.
     pub fn size(mut self, size: u64) -> Self {
         self.0.FileSize = size as i64;
         self
     }
 
-    #[must_use]
+    // TODO: create a method for specifying that it's a directory.
+    /// File attributes.
     pub fn attributes(mut self, attributes: u32) -> Self {
         self.0.BasicInfo.FileAttributes = attributes;
         self

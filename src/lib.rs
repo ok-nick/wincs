@@ -16,6 +16,6 @@ pub use placeholder_file::{BatchCreate, Metadata, PlaceholderFile};
 pub use request::{Process, Request};
 pub use root::{
     active_roots, is_supported, Connection, HydrationPolicy, HydrationType, PopulationType,
-    ProtectionMode, Registration, SecurityId, Session, SupportedAttributes, 
-    SyncRootIdBuilder, SyncRootId,
+    ProtectionMode, Registration, SecurityId, Session, SupportedAttributes, SyncRootId,
+    SyncRootIdBuilder,
 };

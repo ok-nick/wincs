@@ -499,14 +499,13 @@ pub struct UpdateOptions<'a> {
 }
 
 impl<'a> UpdateOptions<'a> {
-    #[must_use]
     pub fn metadata(mut self, metadata: Metadata) -> Self {
         self.metadata = Some(metadata);
         self
     }
 
     // TODO: user should be able to specify an array of RangeBounds
-    #[must_use]
+
     pub fn dehydrate_range(mut self, range: Range<u64>) -> Self {
         self.dehydrate_range.push(CF_FILE_RANGE {
             StartingOffset: range.start as i64,
@@ -515,59 +514,54 @@ impl<'a> UpdateOptions<'a> {
         self
     }
 
-    #[must_use]
     pub fn update_if_synced(mut self) -> Self {
         self.flags |= CloudFilters::CF_UPDATE_FLAG_VERIFY_IN_SYNC;
         self
     }
 
-    #[must_use]
     pub fn mark_sync(mut self) -> Self {
         self.flags |= CloudFilters::CF_UPDATE_FLAG_MARK_IN_SYNC;
         self
     }
 
     // files only
-    #[must_use]
+
     pub fn dehydrate(mut self) -> Self {
         self.flags |= CloudFilters::CF_UPDATE_FLAG_DEHYDRATE;
         self
     }
 
     // directories only
-    #[must_use]
+
     pub fn children_present(mut self) -> Self {
         self.flags |= CloudFilters::CF_UPDATE_FLAG_DISABLE_ON_DEMAND_POPULATION;
         self
     }
 
-    #[must_use]
     pub fn remove_blob(mut self) -> Self {
         self.flags |= CloudFilters::CF_UPDATE_FLAG_REMOVE_FILE_IDENTITY;
         self
     }
 
-    #[must_use]
     pub fn mark_unsync(mut self) -> Self {
         self.flags |= CloudFilters::CF_UPDATE_FLAG_CLEAR_IN_SYNC;
         self
     }
 
     // TODO: what does this do?
-    #[must_use]
+
     pub fn remove_properties(mut self) -> Self {
         self.flags |= CloudFilters::CF_UPDATE_FLAG_REMOVE_PROPERTY;
         self
     }
 
     // TODO: this doesn't seem necessary
-    #[must_use]
+
     pub fn skip_0_metadata_fields(mut self) -> Self {
         self.flags |= CloudFilters::CF_UPDATE_FLAG_PASSTHROUGH_FS_METADATA;
         self
     }
 
-    #[must_use]
     pub fn blob(mut self, blob: &'a [u8]) -> Self {
         assert!(
             blob.len() <= CloudFilters::CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH as usize,
