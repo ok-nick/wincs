@@ -20,8 +20,8 @@ where
         self.sync_root_info().is_ok()
     }
 
-    /// Information about the sync root that the path is located in.
     // TODO: This call requires a struct to be made for getters of StorageProviderSyncRootInfo
+    /// Information about the sync root that the path is located in.
     fn sync_root_info(&self) -> core::Result<StorageProviderSyncRootInfo> {
         StorageProviderSyncRootManager::GetSyncRootInformationForFolder(
             StorageFolder::GetFolderFromPathAsync(
