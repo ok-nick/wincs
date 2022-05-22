@@ -15,10 +15,12 @@ pub trait PathExt
 where
     Self: AsRef<Path>,
 {
+    /// Whether or not the path is located inside of a sync root.
     fn in_sync_root(&self) -> bool {
         self.sync_root_info().is_ok()
     }
 
+    /// Information about the sync root that the path is located in.
     // TODO: This call requires a struct to be made for getters of StorageProviderSyncRootInfo
     fn sync_root_info(&self) -> core::Result<StorageProviderSyncRootInfo> {
         StorageProviderSyncRootManager::GetSyncRootInformationForFolder(
