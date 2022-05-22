@@ -8,6 +8,7 @@ use crate::{
     request::{RawConnectionKey, RawTransferKey},
 };
 
+/// A ticket for the `SyncFilter::fetch_data` callback.
 #[derive(Debug)]
 pub struct FetchData {
     connection_key: RawConnectionKey,
@@ -15,6 +16,7 @@ pub struct FetchData {
 }
 
 impl FetchData {
+    /// Create a new `FetchData`.
     pub fn new(connection_key: RawConnectionKey, transfer_key: RawTransferKey) -> Self {
         Self {
             connection_key,
@@ -22,11 +24,13 @@ impl FetchData {
         }
     }
 
+    /// Fail the callback with the specified error.
     pub fn fail(&self, error_kind: CloudErrorKind) -> core::Result<()> {
         command::Write::fail(self.connection_key, self.transfer_key, error_kind)
     }
 }
 
+/// A ticket for the `SyncFilter::validate_data` callback.
 #[derive(Debug)]
 pub struct ValidateData {
     connection_key: RawConnectionKey,
@@ -34,6 +38,7 @@ pub struct ValidateData {
 }
 
 impl ValidateData {
+    /// Create a new `ValidateData`.
     pub fn new(connection_key: RawConnectionKey, transfer_key: RawTransferKey) -> Self {
         Self {
             connection_key,
@@ -44,15 +49,18 @@ impl ValidateData {
     // TODO: make this generic over a RangeBounds
     // if the range specified is past the current file length, will it consider that range to be validated?
     // https://docs.microsoft.com/en-us/answers/questions/750302/if-the-ackdata-field-of-cf-operation-parameters-is.html
+    /// Confirms the specified range in the file is valid.
     pub fn pass(&self, range: Range<u64>) -> core::Result<()> {
         command::Validate { range }.execute(self.connection_key, self.transfer_key)
     }
 
+    /// Fail the callback with the specified error.
     pub fn fail(&self, error_kind: CloudErrorKind) -> core::Result<()> {
         command::Validate::fail(self.connection_key, self.transfer_key, error_kind)
     }
 }
 
+/// A ticket for the `SyncFilter::fetch_placeholders` callback.
 #[derive(Debug)]
 pub struct FetchPlaceholders {
     connection_key: RawConnectionKey,
@@ -60,6 +68,7 @@ pub struct FetchPlaceholders {
 }
 
 impl FetchPlaceholders {
+    /// Create a new `FetchPlaceholders`.
     pub fn new(connection_key: RawConnectionKey, transfer_key: RawTransferKey) -> Self {
         Self {
             connection_key,
@@ -67,12 +76,15 @@ impl FetchPlaceholders {
         }
     }
 
+
+    /// Fail the callback with the specified error.
     pub fn fail(&self, error_kind: CloudErrorKind) -> core::Result<()> {
         command::CreatePlaceholders::fail(self.connection_key, self.transfer_key, error_kind)
             .and(Ok(()))
     }
 }
 
+/// A ticket for the `SyncFilter::dehydrate` callback.
 #[derive(Debug)]
 pub struct Dehydrate {
     connection_key: RawConnectionKey,
@@ -80,6 +92,7 @@ pub struct Dehydrate {
 }
 
 impl Dehydrate {
+    /// Create a new `Dehydrate.
     pub fn new(connection_key: RawConnectionKey, transfer_key: RawTransferKey) -> Self {
         Self {
             connection_key,
@@ -87,19 +100,23 @@ impl Dehydrate {
         }
     }
 
+    /// Confirms dehydration of the file.
     pub fn pass(&self) -> core::Result<()> {
         command::Dehydrate { blob: None }.execute(self.connection_key, self.transfer_key)
     }
 
+    /// Confirms dehydration of the file and updates its file blob.
     pub fn pass_with_blob(&self, blob: &[u8]) -> core::Result<()> {
         command::Dehydrate { blob: Some(blob) }.execute(self.connection_key, self.transfer_key)
     }
 
+    /// Fail the callback with the specified error.
     pub fn fail(&self, error_kind: CloudErrorKind) -> core::Result<()> {
         command::Dehydrate::fail(self.connection_key, self.transfer_key, error_kind)
     }
 }
 
+/// A ticket for the `SyncFilter::delete` callback.
 #[derive(Debug)]
 pub struct Delete {
     connection_key: RawConnectionKey,
@@ -107,6 +124,7 @@ pub struct Delete {
 }
 
 impl Delete {
+    /// Create a new `Delete`.
     pub fn new(connection_key: RawConnectionKey, transfer_key: RawTransferKey) -> Self {
         Self {
             connection_key,
@@ -114,15 +132,18 @@ impl Delete {
         }
     }
 
+    /// Confirms deletion of the file.
     pub fn pass(&self) -> core::Result<()> {
         command::Delete.execute(self.connection_key, self.transfer_key)
     }
 
+    /// Fail the callback with the specified error.
     pub fn fail(&self, error_kind: CloudErrorKind) -> core::Result<()> {
         command::Delete::fail(self.connection_key, self.transfer_key, error_kind)
     }
 }
 
+/// A ticket for the `SyncFilter::rename` callback.
 #[derive(Debug)]
 pub struct Rename {
     connection_key: RawConnectionKey,
@@ -130,6 +151,7 @@ pub struct Rename {
 }
 
 impl Rename {
+    /// Create a new `Rename`.
     pub fn new(connection_key: RawConnectionKey, transfer_key: RawTransferKey) -> Self {
         Self {
             connection_key,
@@ -137,10 +159,12 @@ impl Rename {
         }
     }
 
+    /// Confirms the rename/move of a file.
     pub fn pass(&self) -> core::Result<()> {
         command::Rename.execute(self.connection_key, self.transfer_key)
     }
 
+    /// Fail the callback with the specified error.
     pub fn fail(&self, error_kind: CloudErrorKind) -> core::Result<()> {
         command::Rename::fail(self.connection_key, self.transfer_key, error_kind)
     }

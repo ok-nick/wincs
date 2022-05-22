@@ -167,7 +167,6 @@ pub trait FileExt: AsRawHandle {
         }
     }
 
-    // TODO: make a type for Usn's
     fn mark_sync(&self, usn: Usn) -> core::Result<Usn> {
         mark_sync_state(self.as_raw_handle(), true, usn)
     }
@@ -447,8 +446,25 @@ impl<'a> ConvertOptions<'a> {
     }
 
     // can only be called for directories
-    pub fn children_not_present(mut self) -> Self {
+    pub fn has_no_children(mut self) -> Self {
         self.flags |= CloudFilters::CF_CONVERT_FLAG_ENABLE_ON_DEMAND_POPULATION;
+        self
+    }
+
+    /// Blocks this placeholder from being dehydrated.
+    ///
+    /// This flag does not work on directories.
+    pub fn block_dehydration(mut self) -> Self {
+        self.flags |= CloudFilters::CF_CONVERT_FLAG_ALWAYS_FULL;
+        self
+    }
+
+    /// Forces the conversion of a non-cloud placeholder file to a cloud placeholder file.
+    /// 
+    /// Placeholder files are a part of the NTFS file system and thus a placeholder not associated
+    /// with the sync root is possible.
+    pub fn force(mut self) -> Self {
+        self.flags |= CloudFilters::CF_CONVERT_FLAG_FORCE_CONVERT_TO_CLOUD_FILE;
         self
     }
 
@@ -462,23 +478,6 @@ impl<'a> ConvertOptions<'a> {
         self.blob = Some(blob);
         self
     }
-
-    // TODO: missing docs CF_CONVERT_FLAGS
-    // https://docs.microsoft.com/en-us/answers/questions/749972/missing-documentation-in-cf-convert-flags-cfapi.html
-
-    // pub fn always_full(mut self) -> Self {
-    //     self.flags |= CloudFilters::CF_CONVERT_FLAG_ALWAYS_FULL;
-    //     self
-    // }
-
-    // pub fn convert_to_cloud_file(mut self) -> Self {
-    //     set_flag(
-    //         &mut self.flags,
-    //         CloudFilters::CF_CONVERT_FLAG_FORCE_CONVERT_TO_CLOUD_FILE,
-    //         yes,
-    //     );
-    //     self
-    // }
 }
 
 impl Default for ConvertOptions<'_> {
@@ -505,7 +504,6 @@ impl<'a> UpdateOptions<'a> {
     }
 
     // TODO: user should be able to specify an array of RangeBounds
-
     pub fn dehydrate_range(mut self, range: Range<u64>) -> Self {
         self.dehydrate_range.push(CF_FILE_RANGE {
             StartingOffset: range.start as i64,
@@ -525,14 +523,12 @@ impl<'a> UpdateOptions<'a> {
     }
 
     // files only
-
     pub fn dehydrate(mut self) -> Self {
         self.flags |= CloudFilters::CF_UPDATE_FLAG_DEHYDRATE;
         self
     }
 
     // directories only
-
     pub fn children_present(mut self) -> Self {
         self.flags |= CloudFilters::CF_UPDATE_FLAG_DISABLE_ON_DEMAND_POPULATION;
         self
@@ -549,14 +545,12 @@ impl<'a> UpdateOptions<'a> {
     }
 
     // TODO: what does this do?
-
     pub fn remove_properties(mut self) -> Self {
         self.flags |= CloudFilters::CF_UPDATE_FLAG_REMOVE_PROPERTY;
         self
     }
 
     // TODO: this doesn't seem necessary
-
     pub fn skip_0_metadata_fields(mut self) -> Self {
         self.flags |= CloudFilters::CF_UPDATE_FLAG_PASSTHROUGH_FS_METADATA;
         self
@@ -653,6 +647,6 @@ impl PlaceholderInfo {
     }
 
     pub fn blob(&self) -> &[u8] {
-        &self.data[(mem::size_of::<CF_PLACEHOLDER_STANDARD_INFO>() + 1)..]
+        &self.data[mem::size_of::<CF_PLACEHOLDER_STANDARD_INFO>()..]
     }
 }
