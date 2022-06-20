@@ -1,9 +1,13 @@
-# wincs
-[![Latest Release](https://img.shields.io/github/v/release/ok-nick/wincs?include_prereleases)](https://github.com/ok-nick/wincs/releases/latest)
-[![Windows Cloud Sync Engine](https://img.shields.io/badge/-Windows%20Cloud%20Sync%20Engine-blueviolet)](https://github.com/ok-nick/wincs)
-[![Discord](https://img.shields.io/discord/834969350061424660)](https://discord.gg/w9Bc6xH7uC)
+#<div align="center">
+  <h1><code>wincs</code></h1>
+  <p><strong>Windows Cloud Sync</strong></p>
+  <p>
+    <a href="https://github.com/ok-nick/wincs/releases/latest"><img src="https://img.shields.io/github/v/release/ok-nick/wincs?include_prereleases" alt="release" /></a>
+    <a href="https://discord.gg/w9Bc6xH7uC"><img src="https://img.shields.io/discord/834969350061424660" alt="discord" /></a>
+  </p>
+</div>
 
-`wincs` is a safe and idiomatic wrapper around the native [Windows Cloud Filter API](https://docs.microsoft.com/en-us/windows/win32/cfapi/build-a-cloud-file-sync-engine). Because it is built around the Cloud Filter API, it has first-class Windows features that are only supported through its API.
+`wincs` is a safe and idiomatic wrapper around the native [Windows Cloud Filter API](https://docs.microsoft.com/en-us/windows/win32/cfapi/build-a-cloud-file-sync-engine). The Cloud Filter API is an interface for implementing remote file systems from the user space. It is much like [FUSE](#why-not-fuse?), although it contains many first-class Windows features that are only available through its API.
 For example:
 * [Placeholder files](#what-are-placeholders)
     * Partial files
