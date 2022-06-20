@@ -3,7 +3,7 @@
 [![Windows Cloud Sync Engine](https://img.shields.io/badge/-Windows%20Cloud%20Sync%20Engine-blueviolet)](https://github.com/ok-nick/wincs)
 [![Discord](https://img.shields.io/discord/834969350061424660)](https://discord.gg/w9Bc6xH7uC)
 
-`wincs` is a safe and idiomatic wrapper around the native [Windows Cloud Filter API](https://docs.microsoft.com/en-us/windows/win32/cfapi/build-a-cloud-file-sync-engine). Because it is built around the cfapi, it has first-class Windows features that are only supported through its API.
+`wincs` is a safe and idiomatic wrapper around the native [Windows Cloud Filter API](https://docs.microsoft.com/en-us/windows/win32/cfapi/build-a-cloud-file-sync-engine). Because it is built around the Cloud Filter API, it has first-class Windows features that are only supported through its API.
 For example:
 * [Placeholder files](#what-are-placeholders)
     * Partial files
@@ -30,7 +30,7 @@ For example:
 * Files are cached to the disk (if set), allowing for offline access
 * TODO: There is also a new API for custom UI, IStorageProviderStatusUISource
 
-As of right now, the Cloud Filter API (cfapi) is used in production by OneDrive, Google Drive, Dropbox, and many other clients.
+As of right now, the Cloud Filter API is used in production by OneDrive, Google Drive, Dropbox, and many other clients.
 
 ## TODO
 Documentation needs to be added and refined. Grep `TODO` to find a list of unsolved issues. In addition, there are many unimplemented features included with `TODO` comments. The API is subject to change and I am open to opinions for change. The [examples directory](https://github.com/ok-nick/wincs/tree/main/examples) is outdated and needs refinement, as well as commenting. CI and CD are also needed.
