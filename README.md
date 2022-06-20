@@ -1,4 +1,4 @@
-#<div align="center">
+<div align="center">
   <h1><code>wincs</code></h1>
   <p><strong>Windows Cloud Sync</strong></p>
   <p>
