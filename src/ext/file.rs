@@ -14,11 +14,14 @@ use windows::{
         Storage::{
             CloudFilters::{
                 self, CfConvertToPlaceholder, CfDehydratePlaceholder, CfGetPlaceholderInfo,
-                CfGetPlaceholderStateFromFileInfo, CfGetSyncRootInfoByHandle, CfHydratePlaceholder,
-                CfRevertPlaceholder, CfSetInSyncState, CfSetPinState, CfUpdatePlaceholder,
-                CF_CONVERT_FLAGS, CF_FILE_RANGE, CF_PIN_STATE, CF_PLACEHOLDER_STANDARD_INFO,
-                CF_PLACEHOLDER_STATE, CF_SET_PIN_FLAGS, CF_SYNC_PROVIDER_STATUS,
-                CF_SYNC_ROOT_INFO_STANDARD, CF_SYNC_ROOT_STANDARD_INFO, CF_UPDATE_FLAGS,
+                CfGetPlaceholderRangeInfo, CfGetPlaceholderStateFromFileInfo,
+                CfGetSyncRootInfoByHandle, CfHydratePlaceholder, CfRevertPlaceholder,
+                CfSetInSyncState, CfSetPinState, CfUpdatePlaceholder, CF_CONVERT_FLAGS,
+                CF_FILE_RANGE, CF_PIN_STATE, CF_PLACEHOLDER_INFO_CLASS,
+                CF_PLACEHOLDER_RANGE_INFO_CLASS, CF_PLACEHOLDER_RANGE_INFO_ONDISK,
+                CF_PLACEHOLDER_STANDARD_INFO, CF_PLACEHOLDER_STATE, CF_SET_PIN_FLAGS,
+                CF_SYNC_PROVIDER_STATUS, CF_SYNC_ROOT_INFO_STANDARD, CF_SYNC_ROOT_STANDARD_INFO,
+                CF_UPDATE_FLAGS,
             },
             FileSystem::{self, GetFileInformationByHandleEx, FILE_ATTRIBUTE_TAG_INFO},
         },
@@ -105,6 +108,29 @@ pub trait FileExt: AsRawHandle {
 
     fn background_dehydrate<T: RangeBounds<u64>>(&self, range: T) -> core::Result<()> {
         dehydrate(self.as_raw_handle(), range, true)
+    }
+
+    // handle only needs read access
+    fn read_direct(
+        &self,
+        read_type: ReadType,
+        offset: u64,
+        buffer: &mut [u8],
+    ) -> core::Result<u32> {
+        // TODO: buffer length must be u32 max
+        let mut length = 0;
+        unsafe {
+            CfGetPlaceholderRangeInfo(
+                HANDLE(self.as_raw_handle() as isize),
+                read_type.into(),
+                offset as i64,
+                buffer.len() as i64,
+                buffer as *mut _ as *mut _,
+                buffer.len() as u32,
+                &mut length as *mut _,
+            )
+        }
+        .map(|_| length)
     }
 
     fn placeholder_info(&self) -> core::Result<PlaceholderInfo> {
@@ -264,6 +290,27 @@ fn dehydrate<T: RangeBounds<u64>>(
 }
 
 impl FileExt for File {}
+
+/// The type of data to read from a placeholder.
+#[derive(Debug, Copy, Clone)]
+pub enum ReadType {
+    /// Any data that is saved to the disk.
+    Saved,
+    /// Data that has been synced to the cloud.
+    Validated,
+    /// Data that has not synced to the cloud.
+    Modified,
+}
+
+impl From<ReadType> for CF_PLACEHOLDER_RANGE_INFO_CLASS {
+    fn from(read_type: ReadType) -> Self {
+        match read_type {
+            ReadType::Saved => CloudFilters::CF_PLACEHOLDER_RANGE_INFO_ONDISK,
+            ReadType::Validated => CloudFilters::CF_PLACEHOLDER_RANGE_INFO_VALIDATED, 
+            ReadType::Modified => CloudFilters::CF_PLACEHOLDER_RANGE_INFO_MODIFIED 
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct SyncRootInfo {
@@ -460,7 +507,7 @@ impl<'a> ConvertOptions<'a> {
     }
 
     /// Forces the conversion of a non-cloud placeholder file to a cloud placeholder file.
-    /// 
+    ///
     /// Placeholder files are a part of the NTFS file system and thus a placeholder not associated
     /// with the sync root is possible.
     pub fn force(mut self) -> Self {
