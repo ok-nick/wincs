@@ -111,7 +111,7 @@ pub trait FileExt: AsRawHandle {
     }
 
     // handle only needs read access
-    fn read_direct(
+    fn read_raw(
         &self,
         read_type: ReadType,
         offset: u64,
@@ -306,8 +306,8 @@ impl From<ReadType> for CF_PLACEHOLDER_RANGE_INFO_CLASS {
     fn from(read_type: ReadType) -> Self {
         match read_type {
             ReadType::Saved => CloudFilters::CF_PLACEHOLDER_RANGE_INFO_ONDISK,
-            ReadType::Validated => CloudFilters::CF_PLACEHOLDER_RANGE_INFO_VALIDATED, 
-            ReadType::Modified => CloudFilters::CF_PLACEHOLDER_RANGE_INFO_MODIFIED 
+            ReadType::Validated => CloudFilters::CF_PLACEHOLDER_RANGE_INFO_VALIDATED,
+            ReadType::Modified => CloudFilters::CF_PLACEHOLDER_RANGE_INFO_MODIFIED,
         }
     }
 }
