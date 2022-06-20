@@ -1,6 +1,4 @@
 # wincs
-Windows Cloud Sync Engine
-
 [![Latest Release](https://img.shields.io/github/v/release/ok-nick/wincs?include_prereleases)](https://github.com/ok-nick/wincs/releases/latest)
 [![Windows Cloud Sync Engine](https://img.shields.io/badge/-Windows%20Cloud%20Sync%20Engine-blueviolet)](https://github.com/ok-nick/wincs)
 [![Discord](https://img.shields.io/discord/834969350061424660)](https://discord.gg/w9Bc6xH7uC)
