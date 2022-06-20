@@ -57,7 +57,7 @@ Unlike `dokany`, `winfsp` currently does not have a Rust API. Perhaps at some po
 ### What are placeholders?
 Placeholders are another term for NTFS sparse files. To put it simple, they are empty files that are meant to represent real files, although are not backed by any allocation unless requested. The way they work is heavily dependent on the sync engines' configuration. Know that if a process were to read the content of the placeholder, it would be "hydrated" (its file contents would be allocated). For more information, read [here](https://docs.microsoft.com/en-us/windows/win32/cfapi/build-a-cloud-file-sync-engine). 
 
-### I know `wincs` is maintained, but does Windows maintain the Cloud Filter API?
+### I know `wincs` is maintained, but does Microsoft maintain the Cloud Filter API?
 Of course, it is used by Microsoft's very own OneDrive Client. I have reported numerous issues and received quick feedback via the [Microsoft Q&A](https://docs.microsoft.com/en-us/answers/search.html?c=7&includeChildren=false&type=question&redirect=search%2Fsearch&sort=newest&q=cfapi). There are a lot of undocumented and unimplemented portions of the API, although they are not necessary for the features described [here](#wincs).
 
 ## Additional Resources
