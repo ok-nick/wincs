@@ -3,7 +3,7 @@
 [![Windows Cloud Sync Engine](https://img.shields.io/badge/-Windows%20Cloud%20Sync%20Engine-blueviolet)](https://github.com/ok-nick/wincs)
 [![Discord](https://img.shields.io/discord/834969350061424660)](https://discord.gg/w9Bc6xH7uC)
 
-`wincs` is a safe and idiomatic wrapper around the native [Windows Cloud Filter API](https://docs.microsoft.com/en-us/windows/win32/cfapi/build-a-cloud-file-sync-engine) (cfapi). Because it is built around the cfapi, it has first-class Windows features that are only supported through its API.
+`wincs` is a safe and idiomatic wrapper around the native [Windows Cloud Filter API](https://docs.microsoft.com/en-us/windows/win32/cfapi/build-a-cloud-file-sync-engine). Because it is built around the cfapi, it has first-class Windows features that are only supported through its API.
 For example:
 * [Placeholder files](#what-are-placeholders)
     * Partial files
