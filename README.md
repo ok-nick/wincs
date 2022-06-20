@@ -50,7 +50,7 @@ Below is a simple snippet of implementing a sync engine. For more, in-depth exam
 ## FAQ
 
 ### Why not FUSE?
-Unfortunately, FUSE is only implemented on Unix-like operating systems. Luckily, there are numerous alternatives for implementing file systems on Windows, such as `dokany` or `winfsp`.
+Unfortunately, FUSE is only implemented for Unix-like operating systems. Luckily, there are numerous alternatives for implementing file systems on Windows, such as `dokany` or `winfsp`.
 
 #### Why not `dokany`?
 `dokany` has a Rust API and is accessible using safe code. However, it is fairly low-level and does not have the first-class capabilities supported by `wincs`. Read more [here](#wincs).
@@ -59,8 +59,8 @@ Unfortunately, FUSE is only implemented on Unix-like operating systems. Luckily,
 Unlike `dokany`, `winfsp` currently does not have a Rust API. Perhaps at some point it may, but even so, it is impossible to have the first-class features supported by `wincs`. Read more [here](#wincs).
 
 ### What are placeholders?
-Placeholders are another term for NTFS sparse files. To put it simple, they are empty files that are meant to represent real files, although are not backed by any allocation unless requested. The way they work is heavily dependent on the sync engines' configuration. Know that if a process were to read the content of the placeholder, it would be "hydrated" (its file contents would be allocated). For more information, read [here](https://docs.microsoft.com/en-us/windows/win32/cfapi/build-a-cloud-file-sync-engine). 
-
+Placeholders are internally [NTFS sparse files](https://docs.microsoft.com/en-us/windows/win32/fileio/sparse-files) and some [reparse point magic](https://docs.microsoft.com/en-us/windows/win32/cfapi/build-a-cloud-file-sync-engine#compatibility-with-applications-that-use-reparse-points). To put it simple, they are empty files that are meant to represent real files, although are not backed by any allocation unless requested. The way they work is heavily dependent on the sync engines' configuration. Know that if a process were to read the content of the placeholder, it would be "hydrated" (its file contents would be allocated). For more information, read [here](https://docs.microsoft.com/en-us/windows/win32/cfapi/build-a-cloud-file-sync-engine). 
+ 
 ### I know `wincs` is maintained, but does Microsoft maintain the Cloud Filter API?
 Of course, it is used by Microsoft's very own OneDrive Client. I have reported numerous issues and received quick feedback via the [Microsoft Q&A](https://docs.microsoft.com/en-us/answers/search.html?c=7&includeChildren=false&type=question&redirect=search%2Fsearch&sort=newest&q=cfapi). There are a lot of undocumented and unimplemented portions of the API, although they are not necessary for the features described [here](#wincs).
 
