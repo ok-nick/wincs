@@ -7,7 +7,7 @@
   </p>
 </div>
 
-`wincs` is a safe and idiomatic wrapper around the native [Windows Cloud Filter API](https://docs.microsoft.com/en-us/windows/win32/cfapi/build-a-cloud-file-sync-engine). The Cloud Filter API is an interface for implementing remote file systems from the user space. It is much like [FUSE](#why-not-fuse), although it contains many first-class Windows features that are only available through its API.
+`wincs` is a safe and idiomatic wrapper around the native [Windows Cloud Filter API](https://docs.microsoft.com/en-us/windows/win32/cfapi/build-a-cloud-file-sync-engine). The Cloud Filter API is an interface for implementing remote file systems from within user space. It is much like [FUSE](#why-not-fuse), although it contains many first-class Windows features that are only available through its API.
 For example:
 * [Placeholder files](#what-are-placeholders)
     * Partial files
