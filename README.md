@@ -41,7 +41,7 @@ Documentation needs to be added and refined. Grep `TODO` to find a list of unsol
 
 If anyone is interested in contributing, feel free to leave an issue or PR.
 
-## Example
+## Examples
 Below is a simple snippet of implementing a sync engine. For more, in-depth examples, please check out the [examples directory](https://github.com/ok-nick/wincs/tree/main/examples).
 ```rs
 // TODO
