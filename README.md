@@ -72,3 +72,6 @@ If you are looking to contribute or want a deeper understanding of `wincs`, be s
 * [Build a Cloud Sync Engine that Supports Placeholder Files](https://docs.microsoft.com/en-us/windows/win32/cfapi/build-a-cloud-file-sync-engine)
 * [Integrate a Cloud Storage Provider](https://docs.microsoft.com/en-us/windows/win32/shell/integrate-cloud-storage)
 * [Microsoft Q&A Containing "cfapi"](https://docs.microsoft.com/en-us/answers/search.html?c=7&includeChildren=false&type=question&redirect=search%2Fsearch&sort=newest&q=cfapi)
+* [Win32 API](https://docs.microsoft.com/en-us/windows/win32/cfapi/cloud-filter-reference)
+* [UWP API](https://docs.microsoft.com/en-us/uwp/api/windows.storage.provider?view=winrt-22621)
+    * Not all classes in the `Windows.Storage.Provider` namespace are used by cloud providers.
