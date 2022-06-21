@@ -7,7 +7,7 @@
   </p>
 </div>
 
-`wincs` is a safe and idiomatic wrapper around the native [Windows Cloud Filter API](https://docs.microsoft.com/en-us/windows/win32/cfapi/build-a-cloud-file-sync-engine). The Cloud Filter API is an interface for implementing remote file systems from within user space. It is much like [FUSE](#why-not-fuse), although it contains many first-class Windows features that are only available through its API.
+`wincs` is a safe and idiomatic wrapper around the native [Windows Cloud Filter API](https://docs.microsoft.com/en-us/windows/win32/cfapi/build-a-cloud-file-sync-engine). The Cloud Filter API enables developers to implement their own remote file system from within user space. It is much like [FUSE](#why-not-fuse), although it contains many first-class Windows features that are only available through its API.
 For example:
 * [Placeholder files](#what-are-placeholders)
     * Partial files
@@ -63,6 +63,9 @@ Placeholders are internally [NTFS sparse files](https://docs.microsoft.com/en-us
  
 ### I know `wincs` is maintained, but does Microsoft maintain the Cloud Filter API?
 Of course, it is used by Microsoft's very own OneDrive Client. I have reported numerous issues and received quick feedback via the [Microsoft Q&A](https://docs.microsoft.com/en-us/answers/search.html?c=7&includeChildren=false&type=question&redirect=search%2Fsearch&sort=newest&q=cfapi). There are a lot of undocumented and unimplemented portions of the API, although they are not necessary for the features described [here](#wincs).
+
+### Why is `wincs` only for remote files?
+
 
 ## Additional Resources
 If you are looking to contribute or want a deeper understanding of `wincs`, be sure to check out these resources:
