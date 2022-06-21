@@ -69,4 +69,6 @@ You are more than welcome to use it for local files, although the extra features
 
 ## Additional Resources
 If you are looking to contribute or want a deeper understanding of `wincs`, be sure to check out these resources:
-
+* [Build a Cloud Sync Engine that Supports Placeholder Files](https://docs.microsoft.com/en-us/windows/win32/cfapi/build-a-cloud-file-sync-engine)
+* [Integrate a Cloud Storage Provider](https://docs.microsoft.com/en-us/windows/win32/shell/integrate-cloud-storage)
+* [Microsoft Q&A Containing "cfapi"](https://docs.microsoft.com/en-us/answers/search.html?c=7&includeChildren=false&type=question&redirect=search%2Fsearch&sort=newest&q=cfapi)
