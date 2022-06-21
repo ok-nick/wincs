@@ -65,7 +65,7 @@ Placeholders are internally [NTFS sparse files](https://docs.microsoft.com/en-us
 Of course, it is used by Microsoft's very own OneDrive Client. I have reported numerous issues and received quick feedback via the [Microsoft Q&A](https://docs.microsoft.com/en-us/answers/search.html?c=7&includeChildren=false&type=question&redirect=search%2Fsearch&sort=newest&q=cfapi). There are a lot of undocumented and unimplemented portions of the API, although they are not necessary for the features described [here](#wincs).
 
 ### Why is `wincs` only for remote files?
-
+You are more than welcome to use it for local files, although the extra features may not suit your needs. It is recommended to instead use [ProjFS](https://docs.microsoft.com/en-us/windows/win32/projfs/projected-file-system), of which is also backed by Microsoft, but dedicated to "high-speed backing data stores."
 
 ## Additional Resources
 If you are looking to contribute or want a deeper understanding of `wincs`, be sure to check out these resources:
