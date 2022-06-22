@@ -10,7 +10,7 @@ mod usn;
 mod utility;
 
 pub use error::CloudErrorKind;
-pub use filter::SyncFilter;
+pub use filter::{info, ticket, SyncFilter};
 pub use placeholder::{Placeholder, UpdateOptions};
 pub use placeholder_file::{BatchCreate, Metadata, PlaceholderFile};
 pub use request::{Process, Request};

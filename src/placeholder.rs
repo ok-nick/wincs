@@ -94,9 +94,10 @@ impl Placeholder {
 
     /// Validates the data range in the placeholder is valid.
     ///
-    /// This method should be used in the `SyncFilter::validate_data` callback.
+    /// This method should be used in the
+    /// [SyncFilter::validate_data][crate::SyncFilter::validate_data] callback.
     ///
-    /// This method is equivalent to `Validate::execute`.
+    /// This method is equivalent to [Validate::execute][crate::command::Validate::execute].
     // TODO: accept a generic RangeBounds
     pub fn validate(&self, range: Range<u64>) -> core::Result<()> {
         Validate { range }.execute(self.connection_key, self.transfer_key)
@@ -104,22 +105,25 @@ impl Placeholder {
 
     /// Updates various properties on a placeholder.
     ///
-    /// This method is equivalent to calling `Update::execute`.
+    /// This method is equivalent to calling [Update::execute][crate::command::Update::execute].
     pub fn update(&self, options: UpdateOptions) -> core::Result<()> {
         options.0.execute(self.connection_key, self.transfer_key)
     }
 
-    /// Shortcut for calling `Placeholder::update` with `UpdateOptions::mark_sync`.
+    /// Shortcut for calling [Placeholder::update][crate::Placeholder::update] with
+    /// [UpdateOptions::mark_sync][crate::UpdateOptions::mark_sync].
     pub fn mark_sync(&self) -> core::Result<()> {
         self.update(UpdateOptions::new().mark_sync())
     }
 
-    /// Shortcut for calling `Placeholder::update` with `UpdateOptions::metadata`.
+    /// Shortcut for calling [Placeholder::update][crate::Placeholder::update] with
+    /// [UpdateOptions::metadata][crate::UpdateOptions::metadata].
     pub fn set_metadata(&self, metadata: Metadata) -> core::Result<()> {
         self.update(UpdateOptions::new().metadata(metadata))
     }
 
-    /// Shortcut for calling `Placeholder::update` with `UpdateOptions::blob`.
+    /// Shortcut for calling [Placeholder::update][crate::Placeholder::Update] with
+    /// [UpdateOptions::blob][crate::UpdateOptions::blob].
     pub fn set_blob(self, blob: &[u8]) -> core::Result<()> {
         self.update(UpdateOptions::new().blob(blob))
     }
@@ -177,8 +181,8 @@ impl Placeholder {
 impl io::Read for Placeholder {
     /// Read data from a placeholder file.
     ///
-    /// This method is equivalent to calling `Read::execute`, except it will not increment the
-    /// file cursor.
+    /// This method is equivalent to calling [Read::execute][crate::command::Read::execute], except
+    /// it will not increment the file cursor.
     ///
     /// The bytes returned will ALWAYS be the length of the buffer passed in. The operating
     /// system provides these guarantees.
@@ -210,7 +214,7 @@ impl io::Write for Placeholder {
     /// The bytes returned will ALWAYS be the length of the buffer passed in. The operating system
     /// provides these guarantees.
     ///
-    /// This method is equivalent to calling `Write::execute`, except it will not increment the
+    /// This method is equivalent to calling [Write::execute][crate::command::Write::execute], except it will not increment the
     /// file cursor.
     // TODO: confirm the abovementioned is true
     fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
@@ -258,7 +262,7 @@ impl Seek for Placeholder {
 pub struct UpdateOptions<'a>(Update<'a>);
 
 impl<'a> UpdateOptions<'a> {
-    /// Create a new `UpdateOptions`.
+    /// Create a new [UpdateOptions][crate::UpdateOptions].
     pub fn new() -> Self {
         Self::default()
     }
@@ -267,7 +271,8 @@ impl<'a> UpdateOptions<'a> {
     ///
     /// A file or directory should be marked as "synced" when it has all of its data and metadata.
     /// A file that is partially full could still be marked as synced, any remaining data will
-    /// invoke the `SyncFilter::fetch_data` callback automatically if requested.
+    /// invoke the [SyncFilter::fetch_data][crate::SyncFilter::fetch_data] callback automatically
+    /// if requested.
     pub fn mark_sync(mut self) -> Self {
         self.0.mark_sync = true;
         self
@@ -279,8 +284,9 @@ impl<'a> UpdateOptions<'a> {
         self
     }
 
-    /// A buffer of bytes stored with the file that could be accessed through `Request::file_blob`
-    /// or `FileExt::placeholder_info`.
+    /// A buffer of bytes stored with the file that could be accessed through
+    /// [Request::file_blob][crate::Request::file_blob] or
+    /// [FileExt::placeholder_info][crate::FileExt::placeholder_info].
     ///
     /// The buffer must not exceed
     /// [4KiB](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Storage/CloudFilters/constant.CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH.html).

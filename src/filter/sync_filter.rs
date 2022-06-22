@@ -17,13 +17,13 @@ pub trait SyncFilter: Send + Sync {
     /// A placeholder hydration request has been cancelled.
     fn cancel_fetch_data(&self, _request: Request, _info: info::CancelFetchData) {}
 
-    /// Followed by a successful call to `fetch_data`, this callback should verify the integrity of
+    /// Followed by a successful call to [SyncFilter::fetch_data][crate::SyncFilter::fetch_data], this callback should verify the integrity of
     /// the data persisted in the placeholder.
     ///
     /// **You** are responsible for validating the data in the placeholder. To approve or
     /// disapprove the request, use the ticket provided.
     ///
-    /// Note that this callback is only called if `validation_required` is specified.
+    /// Note that this callback is only called if [HydrationPolicy::require_validation][crate::HydrationPolicy::require_validation] is specified.
     fn validate_data(
         &self,
         _request: Request,
@@ -37,7 +37,7 @@ pub trait SyncFilter: Send + Sync {
     }
 
     /// A directory population has been requested. The behavior of this callback is dependent on
-    /// the `PopulationType` specified during registration.
+    /// the [PopulationType][crate::PopulationType] variant specified during registration.
     fn fetch_placeholders(
         &self,
         _request: Request,
@@ -96,7 +96,7 @@ pub trait SyncFilter: Send + Sync {
     /// However, it is up to **you** to approve this. Use the ticket to approve or disapprove the
     /// request.
     ///
-    /// When the operation is completed, the `renamed` callback will be called.
+    /// When the operation is completed, the [SyncFilter::renamed][crate::SyncFilter::renamed] callback will be called.
     fn rename(&self, _request: Request, ticket: ticket::Rename, _info: info::Rename) {
         #[allow(unused_must_use)]
         {

@@ -8,7 +8,7 @@ use crate::{
     request::{RawConnectionKey, RawTransferKey},
 };
 
-/// A ticket for the `SyncFilter::fetch_data` callback.
+/// A ticket for the [SyncFilter::fetch_data][crate::SyncFilter::fetch_data] callback.
 #[derive(Debug)]
 pub struct FetchData {
     connection_key: RawConnectionKey,
@@ -16,7 +16,7 @@ pub struct FetchData {
 }
 
 impl FetchData {
-    /// Create a new `FetchData`.
+    /// Create a new [FetchData][crate::ticket::FetchData].
     pub fn new(connection_key: RawConnectionKey, transfer_key: RawTransferKey) -> Self {
         Self {
             connection_key,
@@ -30,7 +30,7 @@ impl FetchData {
     }
 }
 
-/// A ticket for the `SyncFilter::validate_data` callback.
+/// A ticket for the [SyncFilter::validate_data][crate::SyncFilter::validate_data] callback.
 #[derive(Debug)]
 pub struct ValidateData {
     connection_key: RawConnectionKey,
@@ -38,7 +38,7 @@ pub struct ValidateData {
 }
 
 impl ValidateData {
-    /// Create a new `ValidateData`.
+    /// Create a new [ValidateData][crate::ticket::ValidateData].
     pub fn new(connection_key: RawConnectionKey, transfer_key: RawTransferKey) -> Self {
         Self {
             connection_key,
@@ -60,7 +60,7 @@ impl ValidateData {
     }
 }
 
-/// A ticket for the `SyncFilter::fetch_placeholders` callback.
+/// A ticket for the [SyncFilter::fetch_placeholders][crate::SyncFilter::fetch_placeholders] callback.
 #[derive(Debug)]
 pub struct FetchPlaceholders {
     connection_key: RawConnectionKey,
@@ -68,7 +68,7 @@ pub struct FetchPlaceholders {
 }
 
 impl FetchPlaceholders {
-    /// Create a new `FetchPlaceholders`.
+    /// Create a new [FetchPlaceholders][crate::ticket::FetchPlaceholders].
     pub fn new(connection_key: RawConnectionKey, transfer_key: RawTransferKey) -> Self {
         Self {
             connection_key,
@@ -84,7 +84,7 @@ impl FetchPlaceholders {
     }
 }
 
-/// A ticket for the `SyncFilter::dehydrate` callback.
+/// A ticket for the [SyncFilter::dehydrate][crate::SyncFilter::dehydrate] callback.
 #[derive(Debug)]
 pub struct Dehydrate {
     connection_key: RawConnectionKey,
@@ -92,7 +92,7 @@ pub struct Dehydrate {
 }
 
 impl Dehydrate {
-    /// Create a new `Dehydrate.
+    /// Create a new [Dehydrate][crate::ticket::Dehydrate].
     pub fn new(connection_key: RawConnectionKey, transfer_key: RawTransferKey) -> Self {
         Self {
             connection_key,
@@ -116,7 +116,7 @@ impl Dehydrate {
     }
 }
 
-/// A ticket for the `SyncFilter::delete` callback.
+/// A ticket for the [SyncFilter::delete][crate::SyncFilter::delete] callback.
 #[derive(Debug)]
 pub struct Delete {
     connection_key: RawConnectionKey,
@@ -124,7 +124,7 @@ pub struct Delete {
 }
 
 impl Delete {
-    /// Create a new `Delete`.
+    /// Create a new [Delete][crate::ticket::Delete].
     pub fn new(connection_key: RawConnectionKey, transfer_key: RawTransferKey) -> Self {
         Self {
             connection_key,
@@ -143,7 +143,7 @@ impl Delete {
     }
 }
 
-/// A ticket for the `SyncFilter::rename` callback.
+/// A ticket for the [SyncFilter::rename][crate:SyncFilter::rename] callback.
 #[derive(Debug)]
 pub struct Rename {
     connection_key: RawConnectionKey,
@@ -151,7 +151,7 @@ pub struct Rename {
 }
 
 impl Rename {
-    /// Create a new `Rename`.
+    /// Create a new [Rename][crate::ticket::Rename].
     pub fn new(connection_key: RawConnectionKey, transfer_key: RawTransferKey) -> Self {
         Self {
             connection_key,

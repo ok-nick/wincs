@@ -9,7 +9,7 @@ use windows::Win32::Storage::CloudFilters::{
     CF_CALLBACK_PARAMETERS_0_8, CF_CALLBACK_PARAMETERS_0_9,
 };
 
-/// Information for the `SyncFilter::fetch_data` callback.
+/// Information for the [SyncFilter::fetch_data][crate::SyncFilter::fetch_data] callback.
 #[derive(Debug, Clone, Copy)]
 pub struct FetchData(pub(crate) CF_CALLBACK_PARAMETERS_0_6);
 
@@ -19,7 +19,8 @@ impl FetchData {
         (self.0.Flags & CloudFilters::CF_CALLBACK_FETCH_DATA_FLAG_RECOVERY).0 != 0
     }
 
-    /// Whether or not the callback was called from an explicit hydration via `FileExt::hydrate`.
+    /// Whether or not the callback was called from an explicit hydration via
+    /// [FileExt::hydrate][crate::ext::FileExit::hydrate].
     pub fn explicit_hydration(&self) -> bool {
         (self.0.Flags & CloudFilters::CF_CALLBACK_FETCH_DATA_FLAG_EXPLICIT_HYDRATION).0 != 0
     }
@@ -51,7 +52,7 @@ impl FetchData {
     }
 }
 
-/// Information for the `SyncFilter::cancel_fetch_data` callback.
+/// Information for the [SyncFilter::cancel_fetch_data][crate::SyncFilter::cancel_fetch_data] callback.
 #[derive(Clone, Copy)]
 pub struct CancelFetchData(pub(crate) CF_CALLBACK_PARAMETERS_0_0);
 
@@ -99,7 +100,7 @@ struct CancelFetchDataDebug {
     Length: i64,
 }
 
-/// Information for the `SyncFilter::validate_data` callback.
+/// Information for the [SyncFilter::validate_data][crate::SyncFilter::validate_data] callback.
 #[derive(Debug, Clone, Copy)]
 pub struct ValidateData(pub(crate) CF_CALLBACK_PARAMETERS_0_11);
 
@@ -116,7 +117,8 @@ impl ValidateData {
     }
 }
 
-/// Information for the `SyncFilter::fetch_placeholders` callback.
+/// Information for the [SyncFilter::fetch_placeholders][crate::SyncFilter::fetch_placeholders]
+/// callback.
 #[derive(Debug)]
 pub struct FetchPlaceholders(pub(crate) CF_CALLBACK_PARAMETERS_0_7);
 
@@ -139,7 +141,8 @@ impl FetchPlaceholders {
     }
 }
 
-/// Information for the `SyncFilter::cancel_fetch_placeholders` callback.
+/// Information for the
+/// [SyncFilter::cancel_fetch_placeholders][crate::SyncFilter::cancel_fetch_placeholders] callback.
 #[derive(Clone, Copy)]
 pub struct CancelFetchPlaceholders(pub(crate) CF_CALLBACK_PARAMETERS_0_0);
 
@@ -175,7 +178,7 @@ struct CancelFetchPlaceholdersDebug {
     Flags: CF_CALLBACK_CANCEL_FLAGS,
 }
 
-/// Information for the `SyncFilter::opened` callback.
+/// Information for the [SyncFilter::opened][crate::SyncFilter::opened] callback.
 #[derive(Debug, Clone, Copy)]
 pub struct Opened(pub(crate) CF_CALLBACK_PARAMETERS_0_8);
 
@@ -192,7 +195,7 @@ impl Opened {
     }
 }
 
-/// Information for the `SyncFilter::closed` callback.
+/// Information for the [SyncFilter::closed][crate::SyncFilter::closed] callback.
 #[derive(Debug, Clone, Copy)]
 pub struct Closed(pub(crate) CF_CALLBACK_PARAMETERS_0_1);
 
@@ -203,7 +206,7 @@ impl Closed {
     }
 }
 
-/// Information for the `SyncFilter::dehydrate` callback.
+/// Information for the [SyncFilter::dehydrate][crate::SyncFilter::dehydrate] callback.
 #[derive(Debug, Clone, Copy)]
 pub struct Dehydrate(pub(crate) CF_CALLBACK_PARAMETERS_0_3);
 
@@ -219,7 +222,7 @@ impl Dehydrate {
     }
 }
 
-/// Information for the `SyncFilter::dehydrated` callback.
+/// Information for the [SyncFilter::dehydrated][crate::SyncFilter::dehydrated] callback.
 #[derive(Debug, Clone, Copy)]
 pub struct Dehydrated(pub(crate) CF_CALLBACK_PARAMETERS_0_2);
 
@@ -240,7 +243,7 @@ impl Dehydrated {
     }
 }
 
-/// Information for the `SyncFilter::delete` callback.
+/// Information for the [SyncFilter::delete][crate::SyncFilter::delete] callback.
 #[derive(Debug, Clone, Copy)]
 pub struct Delete(pub(crate) CF_CALLBACK_PARAMETERS_0_5);
 
@@ -256,11 +259,11 @@ impl Delete {
     }
 }
 
-/// Information for the `SyncFilter::deleted` callback.
+/// Information for the [SyncFilter::deleted][crate::SyncFilter::deleted] callback.
 #[derive(Debug, Clone, Copy)]
 pub struct Deleted(pub(crate) CF_CALLBACK_PARAMETERS_0_4);
 
-/// Information for the `SyncFilter::rename` callback.
+/// Information for the [SyncFilter::rename][crate::SyncFilter::rename] callback.
 #[derive(Debug)]
 pub struct Rename(pub(crate) CF_CALLBACK_PARAMETERS_0_10);
 
@@ -290,7 +293,7 @@ impl Rename {
     }
 }
 
-/// Information for the `SyncFilter::renamed` callback.
+/// Information for the [SyncFilter::renamed][crate::SyncFilter::renamed] callback.
 #[derive(Debug)]
 pub struct Renamed(pub(crate) CF_CALLBACK_PARAMETERS_0_9);
 

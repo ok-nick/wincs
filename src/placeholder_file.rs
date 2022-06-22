@@ -22,15 +22,17 @@ use crate::usn::Usn;
 pub struct PlaceholderFile<'a>(CF_PLACEHOLDER_CREATE_INFO, PhantomData<&'a ()>);
 
 impl<'a> PlaceholderFile<'a> {
-    /// Creates a new `PlaceholderFile`.
+    /// Creates a new [PlaceholderFile][crate::PlaceholderFile].
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Marks this `PlaceholderFile` as having no children placeholders on creation.
+    /// Marks this [PlaceholderFile][crate::PlaceholderFile] as having no children placeholders on
+    /// creation.
     ///
-    /// If `PopulationType::Full` is specified on registration, this flag will prevent
-    /// `SyncFilter::fetch_placeholders` from being called for this placeholder.
+    /// If [PopulationType::Full][crate::PopulationType] is specified on registration, this flag
+    /// will prevent [SyncFilter::fetch_placeholders][crate::SyncFilter::fetch_placeholders] from
+    /// being called for this placeholder.
     ///
     /// Only applicable to placeholder directories.
     pub fn has_no_children(mut self) -> Self {
@@ -38,14 +40,15 @@ impl<'a> PlaceholderFile<'a> {
         self
     }
 
-    /// Marks the `PlaceholderFile` as synced.
+    /// Marks the [PlaceholderFile][crate::PlaceholderFile] as synced.
     ///
     /// This flag is used to determine the status of a placeholder shown in the file explorer. It
     /// is applicable to both files and directories.
     ///
     /// A file or directory should be marked as "synced" when it has all of its data and metadata.
     /// A file that is partially full could still be marked as synced, any remaining data will
-    /// invoke the `SyncFilter::fetch_data` callback automatically if requested.
+    /// invoke the [SyncFilter::fetch_data][crate::SyncFilter::fetch_data] callback automatically
+    /// if requested.
     pub fn mark_sync(mut self) -> Self {
         self.0.Flags |= CloudFilters::CF_PLACEHOLDER_CREATE_FLAG_MARK_IN_SYNC;
         self
@@ -65,14 +68,15 @@ impl<'a> PlaceholderFile<'a> {
         self
     }
 
-    /// The metadata for the `PlaceholderFile`.
+    /// The metadata for the [PlaceholderFile][crate::PlaceholderFile].
     pub fn metadata(mut self, metadata: Metadata) -> Self {
         self.0.FsMetadata = metadata.0;
         self
     }
 
     /// A buffer of bytes stored with the file that could be accessed through a
-    /// `Request::file_blob` or `FileExit::placeholder_info`.
+    /// [Request::file_blob][crate::Request::file_blob] or
+    /// [FileExit::placeholder_info][crate::ext::FileExt::placeholder_info].
     ///
     /// The buffer must not exceed
     /// [4KiB](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Storage/CloudFilters/constant.CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH.html).
@@ -91,13 +95,14 @@ impl<'a> PlaceholderFile<'a> {
 
     /// Creates a placeholder file/directory on the file system.
     ///
-    /// The value returned is the final `Usn` after the placeholder is created.
+    /// The value returned is the final [Usn][crate::Usn] after the placeholder is created.
     ///
-    /// It is recommended to use this function over `FileExt::to_placeholder` for efficiency
-    /// purposes. If you need to create multiple placeholders, consider using `BatchCreate`.
+    /// It is recommended to use this function over
+    /// [FileExt::to_placeholder][crate::FileExit::to_placeholder] for efficiency purposes. If you
+    /// need to create multiple placeholders, consider using [BatchCreate][crate::BatchCreate].
     ///
-    /// If you need to create placeholders from a callback, do not use this method. Use the
-    /// `Request::create_placeholder` methods of a `Request`.
+    /// If you need to create placeholders from a callback, do not use this method. Instead, use
+    /// [Request::create_placeholder][crate::Request::create_placeholder].
     pub fn create<P: AsRef<Path>>(mut self, path: P) -> core::Result<Usn> {
         let path = path.as_ref();
 
@@ -168,12 +173,12 @@ impl BatchCreate for [PlaceholderFile<'_>] {
     }
 }
 
-/// The metadata for a `PlaceholderFile`.
+/// The metadata for a [PlaceholderFile][crate::PlaceholderFile].
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Metadata(pub(crate) CF_FS_METADATA);
 
 impl Metadata {
-    /// Creates a new `Metadata`.
+    /// Creates a new [Metadata][crate::Metadata].
     pub fn new() -> Self {
         Self::default()
     }

@@ -1,62 +1,97 @@
-use windows::{
-    core,
-    Win32::Storage::CloudFilters::{CfDisconnectSyncRoot, CF_CONNECTION_KEY},
+use std::{
+    ffi::OsString,
+    path::Path,
+    sync::{Arc, Weak},
 };
 
-use crate::{filter::Callbacks, request::RawConnectionKey};
+use windows::{
+    core,
+    Win32::{
+        Storage::CloudFilters::{self, CfConnectSyncRoot, CF_CONNECT_FLAGS},
+        System::{
+            Com::{self, CoCreateInstance},
+            Search::{self, ISearchCatalogManager, ISearchManager},
+        },
+    },
+};
 
-/// A handle to the current session for a given sync root.
-///
-/// By calling `disconnect`, the session will terminate and no more file operations will be able to
-/// be performed within the sync root. Note that this does **NOT** mean the sync root will be
-/// unregistered. To do so, call `unregister` from the `SyncRoot`.
-///
-/// `disconnect` is called implicitly when the struct is dropped. To handle possible errors, be
-/// sure to call the `disconnect` method explicitly.
-#[derive(Debug)]
-pub struct Session<T> {
-    connection_key: RawConnectionKey,
-    _callbacks: Callbacks,
-    filter: T,
+use crate::{
+    filter::{self, SyncFilter},
+    root::connect::Connection,
+};
+
+/// A builder to create a new connection for the sync root at the specified path.
+#[derive(Debug, Clone, Copy)]
+pub struct Session(CF_CONNECT_FLAGS);
+
+impl Session {
+    /// Create a new [Session][crate::Session].
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    // TODO: what specifically causes an implicit hydration?
+    /// The [block_implicit_hydration][crate::Session::block_implicit_hydration] flag will prevent
+    /// implicit placeholder hydrations from invoking
+    /// [SyncFilter::fetch_data][crate::SyncFilter::fetch_data]. This could occur when an
+    /// anti-virus is scanning file system activity on files within the sync root.
+    ///
+    /// A call to the [FileExt::hydrate][crate::ext::FileExt::hydrate] trait will not be blocked by this flag.
+    pub fn block_implicit_hydration(mut self) -> Self {
+        self.0 |= CloudFilters::CF_CONNECT_FLAG_BLOCK_SELF_IMPLICIT_HYDRATION;
+        self
+    }
+
+    /// Initiates a connection to the sync root with the given [SyncFilter][crate::SyncFilter].
+    pub fn connect<P, T>(self, path: P, filter: T) -> core::Result<Connection<Arc<T>>>
+    where
+        P: AsRef<Path>,
+        T: SyncFilter + 'static,
+    {
+        // https://github.com/microsoft/Windows-classic-samples/blob/27ffb0811ca761741502feaefdb591aebf592193/Samples/CloudMirror/CloudMirror/Utilities.cpp#L19
+        index_path(path.as_ref())?;
+
+        let filter = Arc::new(filter);
+        let callbacks = filter::callbacks::<T>();
+        unsafe {
+            CfConnectSyncRoot(
+                path.as_ref().as_os_str(),
+                callbacks.as_ptr(),
+                // create a weak arc so that it could be upgraded when it's being used and when the
+                // connection is closed, the filter could be freed
+                Weak::into_raw(Arc::downgrade(&filter)) as *const _,
+                // This is enabled by default to remove the Option requirement around various fields of the
+                // [Request][crate::Request] struct
+                self.0
+                    | CloudFilters::CF_CONNECT_FLAG_REQUIRE_FULL_FILE_PATH
+                    | CloudFilters::CF_CONNECT_FLAG_REQUIRE_PROCESS_INFO,
+            )
+        }
+        .map(|key| Connection::new(key.0, callbacks, filter))
+    }
 }
 
-// this struct could house many more windows api functions, although they all seem to do nothing
-// according to the threads on microsoft q&a
-impl<T> Session<T> {
-    pub(crate) fn new(connection_key: RawConnectionKey, callbacks: Callbacks, filter: T) -> Self {
-        Self {
-            connection_key,
-            _callbacks: callbacks,
-            filter,
-        }
-    }
-
-    /// A raw connection key used to identify the connection.
-    pub fn connection_key(&self) -> RawConnectionKey {
-        self.connection_key
-    }
-
-    /// A reference to the inner `SyncFilter` struct.
-    pub fn filter(&self) -> &T {
-        &self.filter
-    }
-
-    /// Disconnects the sync root, read `Session` for more information.
-    pub fn disconnect(self) -> core::Result<()> {
-        self.disconnect_ref()
-    }
-
-    #[inline]
-    fn disconnect_ref(&self) -> core::Result<()> {
-        unsafe { CfDisconnectSyncRoot(&CF_CONNECTION_KEY(self.connection_key)) }
+impl Default for Session {
+    fn default() -> Self {
+        Self(CloudFilters::CF_CONNECT_FLAG_NONE)
     }
 }
 
-impl<T> Drop for Session<T> {
-    fn drop(&mut self) {
-        #[allow(unused_must_use)]
-        {
-            self.disconnect_ref();
-        }
+fn index_path(path: &Path) -> core::Result<()> {
+    unsafe {
+        let searcher: ISearchManager = CoCreateInstance(
+            &Search::CSearchManager as *const _,
+            None,
+            Com::CLSCTX_SERVER,
+        )?;
+
+        let catalog: ISearchCatalogManager = searcher.GetCatalog("SystemIndex")?;
+
+        let mut url = OsString::from("file:///");
+        url.push(path);
+
+        let crawler = catalog.GetCrawlScopeManager()?;
+        crawler.AddDefaultScopeRule(url, true, Search::FF_INDEXCOMPLEXURLS.0 as u32)?;
+        crawler.SaveAll()
     }
 }

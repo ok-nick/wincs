@@ -18,9 +18,11 @@ pub type RawTransferKey = i64;
 
 /// A struct containing various information for the current file operation.
 ///
-/// If there is no activity on the placholder (the methods in the `Placeholder` struct returned by
-/// the `placeholder` method) within 60 seconds, the operating system will automatically invalidate
-/// the request. To prevent this, read the `reset_timeout` method.
+/// If there is no activity on the placeholder (the methods in the
+/// [Placeholder][crate::Placeholder] struct returned by
+/// [Request::placeholder][crate::Request::placeholder]) within 60 seconds, the operating system
+/// will automatically invalidate the request. To prevent this, read
+/// [Request::reset_timeout][crate::Request::reset_timeout].
 #[derive(Debug)]
 pub struct Request(CF_CALLBACK_INFO);
 
@@ -130,8 +132,8 @@ impl Request {
         }
     }
 
-    /// Creates a new `Placeholder` struct to perform various operations on the current placeholder
-    /// file/directory.
+    /// Creates a new [Placeholder][crate::Placeholder] struct to perform various operations on the
+    /// current placeholder file/directory.
     pub fn placeholder(&self) -> Placeholder {
         Placeholder::new(
             self.connection_key(),
@@ -154,18 +156,21 @@ impl Request {
     /// Creates a placeholder file under the current placeholder directory.
     ///
     /// This function will fail if the placeholder associated with the current callback is not a
-    /// directory. Use the `path` method to identify if the placeholder is a directory.
+    /// directory. Use [Request::path][crate::Request::path] to identify if the placeholder is a
+    /// directory.
     #[inline]
     pub fn create_placeholder(&self, placeholder: PlaceholderFile) -> core::Result<Usn> {
         self.create_placeholders(&[placeholder])
             .map(|mut x| x.remove(0))?
     }
 
-    /// Creates multiple placeholder files at once. The returned list contains the resulting `Usn`
-    /// wrapped in a `Result` to signify whether or not the placeholder was created successfully.
+    /// Creates multiple placeholder files at once. The returned list contains the resulting
+    /// [Usn][crate::Usn] wrapped in a [Result][std::result::Result] to signify whether or not the
+    /// placeholder was created successfully.
     ///
     /// This function will fail if the placeholder associated with the current callback is not a
-    /// directory. Use the `path` method to identify if the placeholder is a directory.
+    /// directory. Use the [Request::path][crate::Request::path] method to identify if the
+    /// placeholder is a directory.
     #[inline]
     pub fn create_placeholders(
         &self,
@@ -174,17 +179,20 @@ impl Request {
         self.create_placeholders_with_total(placeholders, placeholders.len() as u64)
     }
 
-    /// Creates multiple placeholder files at once. The returned list contains the resulting `Usn`
-    /// wrapped in a `Result` to signify whether or not the placeholder was created successfully.
+    /// Creates multiple placeholder files at once. The returned list contains the resulting
+    /// [Usn][crate::Usn] wrapped in a [Result][std::result::Result] to signify whether or not the placeholder was
+    /// created successfully.
     ///
     /// The `total` parameter specifies the total number of placeholder files that are a child of
     /// the current placeholder directory. If this value is unknown or is the length of the passed
-    /// slice, consider calling the `create_placeholders` method.
+    /// slice, consider calling
+    /// [Request::create_placeholders][crate::Request::create_placeholders].
     ///
-    /// This method is equivalent to calling `CreatePlaceholders::execute`.
+    /// This method is equivalent to calling
+    /// [CreatePlaceholders::execute][crate::command::CreatePlaceholders::execute].
     ///
     /// This function will fail if the placeholder associated with the current callback is not a
-    /// directory. Use the `path` method to identify if the placeholder is a directory.
+    /// directory. Use the [path][crate::Request::path] method to identify if the placeholder is a directory.
     pub fn create_placeholders_with_total(
         &self,
         placeholders: &[PlaceholderFile],
@@ -232,7 +240,8 @@ impl Process {
     // TODO: Could be optimized
     /// The absolute path to the main executable file of the process in the format of an NT path.
     ///
-    /// This function returns `None` when the operating system failed to retrieve the path.
+    /// This function returns [None][std::option::Option::None] when the operating system failed to
+    /// retrieve the path.
     pub fn path(&self) -> Option<PathBuf> {
         let path = unsafe { U16CString::from_ptr_str(self.0.ImagePath.0) };
         if path == unsafe { U16CString::from_str_unchecked("UNKNOWN") } {
