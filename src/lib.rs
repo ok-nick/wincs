@@ -19,3 +19,4 @@ pub use root::{
     ProtectionMode, Registration, SecurityId, Session, SupportedAttributes, SyncRootId,
     SyncRootIdBuilder,
 };
+pub use usn::Usn;
