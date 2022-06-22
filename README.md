@@ -2,7 +2,8 @@
   <h1><code>wincs</code></h1>
   <p><strong>Windows Cloud Sync</strong></p>
   <p>
-    <a href="https://github.com/ok-nick/wincs/releases/latest"><img src="https://img.shields.io/github/v/release/ok-nick/wincs?include_prereleases" alt="release" /></a>
+    <a href="https://docs.rs/wincs/0.0.0/wincs/"><img src="https://img.shields.io/readthedocs/wincs" alt="docs" /></a>
+    <a href="https://crates.io/crates/wincs"><img src="https://img.shields.io/crates/v/wincs" alt="crates" /></a>
     <a href="https://discord.gg/w9Bc6xH7uC"><img src="https://img.shields.io/discord/834969350061424660?label=discord" alt="discord" /></a>
   </p>
 </div>
