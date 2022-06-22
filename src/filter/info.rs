@@ -20,7 +20,7 @@ impl FetchData {
     }
 
     /// Whether or not the callback was called from an explicit hydration via
-    /// [FileExt::hydrate][crate::ext::FileExit::hydrate].
+    /// [FileExt::hydrate][crate::ext::FileExt::hydrate].
     pub fn explicit_hydration(&self) -> bool {
         (self.0.Flags & CloudFilters::CF_CALLBACK_FETCH_DATA_FLAG_EXPLICIT_HYDRATION).0 != 0
     }
@@ -59,7 +59,7 @@ pub struct CancelFetchData(pub(crate) CF_CALLBACK_PARAMETERS_0_0);
 impl CancelFetchData {
     /// Whether or not the callback failed as a result of the 60 second timeout.
     ///
-    /// Read more [here](Request::reset_timeout).
+    /// Read more [here][crate::Request::reset_timeout].
     pub fn timeout(&self) -> bool {
         (self.0.Flags & CloudFilters::CF_CALLBACK_CANCEL_FLAG_IO_TIMEOUT).0 != 0
     }
@@ -149,7 +149,7 @@ pub struct CancelFetchPlaceholders(pub(crate) CF_CALLBACK_PARAMETERS_0_0);
 impl CancelFetchPlaceholders {
     /// Whether or not the callback failed as a result of the 60 second timeout.
     ///
-    /// Read more [here](Request::reset_timeout).
+    /// Read more [here][crate::Request::reset_timeout].
     pub fn timeout(&self) -> bool {
         (self.0.Flags & CloudFilters::CF_CALLBACK_CANCEL_FLAG_IO_TIMEOUT).0 != 0
     }

@@ -38,7 +38,7 @@ pub struct SyncRootIdBuilder {
 impl SyncRootIdBuilder {
     /// Create a new builder with the given provider name.
     ///
-    /// The provider name MUST NOT contain exclamation points and it must be within (255)[https://docs.microsoft.com/en-us/windows/win32/api/cfapi/ns-cfapi-cf_sync_root_provider_info#remarks] characters.
+    /// The provider name MUST NOT contain exclamation points and it must be within [255](https://docs.microsoft.com/en-us/windows/win32/api/cfapi/ns-cfapi-cf_sync_root_provider_info#remarks) characters.
     pub fn new(provider_name: U16String) -> Self {
         // TODO: assert that is doesn't have exclamation points
         assert!(

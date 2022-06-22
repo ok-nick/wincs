@@ -98,7 +98,7 @@ impl<'a> PlaceholderFile<'a> {
     /// The value returned is the final [Usn][crate::Usn] after the placeholder is created.
     ///
     /// It is recommended to use this function over
-    /// [FileExt::to_placeholder][crate::FileExit::to_placeholder] for efficiency purposes. If you
+    /// [FileExt::to_placeholder][crate::ext::FileExt::to_placeholder] for efficiency purposes. If you
     /// need to create multiple placeholders, consider using [BatchCreate][crate::BatchCreate].
     ///
     /// If you need to create placeholders from a callback, do not use this method. Instead, use

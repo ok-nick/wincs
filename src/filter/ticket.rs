@@ -143,7 +143,7 @@ impl Delete {
     }
 }
 
-/// A ticket for the [SyncFilter::rename][crate:SyncFilter::rename] callback.
+/// A ticket for the [SyncFilter::rename][crate::SyncFilter::rename] callback.
 #[derive(Debug)]
 pub struct Rename {
     connection_key: RawConnectionKey,

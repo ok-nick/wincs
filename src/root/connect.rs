@@ -10,7 +10,7 @@ use crate::{filter::Callbacks, request::RawConnectionKey};
 /// By calling [Connection::disconnect][crate::Connection::disconnect], the session will terminate
 /// and no more file operations will be able to be performed within the sync root. Note that this
 /// does **NOT** mean the sync root will be unregistered. To do so, call
-/// [SyncRoot::unregister][crate::SyncRoot].
+/// [SyncRootId::unregister][crate::SyncRootId::unregister].
 ///
 /// [Connection::disconnect][crate::Connection::disconnect] is called implicitly when the struct is
 /// dropped. To handle possible errors, be sure to call

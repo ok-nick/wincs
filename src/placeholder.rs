@@ -122,7 +122,7 @@ impl Placeholder {
         self.update(UpdateOptions::new().metadata(metadata))
     }
 
-    /// Shortcut for calling [Placeholder::update][crate::Placeholder::Update] with
+    /// Shortcut for calling [Placeholder::update][crate::Placeholder::update] with
     /// [UpdateOptions::blob][crate::UpdateOptions::blob].
     pub fn set_blob(self, blob: &[u8]) -> core::Result<()> {
         self.update(UpdateOptions::new().blob(blob))
@@ -286,7 +286,7 @@ impl<'a> UpdateOptions<'a> {
 
     /// A buffer of bytes stored with the file that could be accessed through
     /// [Request::file_blob][crate::Request::file_blob] or
-    /// [FileExt::placeholder_info][crate::FileExt::placeholder_info].
+    /// [FileExt::placeholder_info][crate::ext::FileExt::placeholder_info].
     ///
     /// The buffer must not exceed
     /// [4KiB](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Storage/CloudFilters/constant.CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH.html).
