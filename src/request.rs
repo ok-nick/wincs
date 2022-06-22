@@ -86,7 +86,7 @@ impl Request {
     /// The absolute path of the placeholder file/directory starting from the root directory of the
     /// volume.
     ///
-    /// (Read here for more information on this
+    /// [Read here for more information on this
     /// function.](https://docs.microsoft.com/en-us/windows/win32/api/cfapi/ns-cfapi-cf_callback_info#remarks)
     pub fn path(&self) -> PathBuf {
         unsafe { U16CStr::from_ptr_str(self.0.NormalizedPath.0) }
@@ -94,13 +94,12 @@ impl Request {
             .into()
     }
 
-    // ranges from 0-CF_MAX_PRIORITY_HINT (15)
     /// A numeric scale ranging from
-    /// 0-(15)[https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Storage/CloudFilters/constant.CF_MAX_PRIORITY_HINT.html]
+    /// 0-[15](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Storage/CloudFilters/constant.CF_MAX_PRIORITY_HINT.html)
     /// to describe the priority of the file operation.
     ///
-    /// (Currently, this value does not
-    /// change.)[https://docs.microsoft.com/en-us/answers/questions/798674/priority-in-cf-callback-info.html.
+    /// [Currently, this value does not
+    /// change.](https://docs.microsoft.com/en-us/answers/questions/798674/priority-in-cf-callback-info.html)
     pub fn priority_hint(&self) -> u8 {
         self.0.PriorityHint
     }
