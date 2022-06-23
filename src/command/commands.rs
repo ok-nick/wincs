@@ -24,7 +24,9 @@ use crate::{
 /// Read data from a placeholder file.
 #[derive(Debug, Default)]
 pub struct Read<'a> {
+    /// The buffer of data to read into.
     pub buffer: &'a mut [u8],
+    /// The starting offset of from where to read.
     pub position: u64,
 }
 
@@ -54,7 +56,9 @@ impl Command for Read<'_> {
 /// Write data to a placeholder file.
 #[derive(Debug, Clone, Default)]
 pub struct Write<'a> {
+    /// The buffer of data to write into the file.
     pub buffer: &'a [u8],
+    /// The starting offset of from where to write.
     pub position: u64,
 }
 
@@ -107,8 +111,11 @@ impl Fallible for Write<'_> {
 /// Update various properties on a placeholder.
 #[derive(Debug, Clone, Default)]
 pub struct Update<'a> {
+    /// Whether or not to mark the placeholder as "synced."
     pub mark_sync: bool,
+    /// Optional metadata to update.
     pub metadata: Option<Metadata>,
+    /// Optional file blob to update.
     pub blob: Option<&'a [u8]>,
 }
 
@@ -143,7 +150,9 @@ impl Command for Update<'_> {
 /// Create placeholder files/directories.
 #[derive(Debug, Clone, Default)]
 pub struct CreatePlaceholders<'a> {
+    /// The placeholders to create.
     pub placeholders: &'a [PlaceholderFile<'a>],
+    /// The total amount of placeholders that are a child of the current directory.
     pub total: u64,
 }
 
@@ -211,6 +220,7 @@ impl<'a> Fallible for CreatePlaceholders<'a> {
 /// Validate the data range in the placeholder file is valid.
 #[derive(Debug, Clone, Default)]
 pub struct Validate {
+    /// The range of data to validate as "good."
     pub range: Range<u64>,
 }
 
@@ -258,6 +268,7 @@ impl Fallible for Validate {
 /// Confirm dehydration of the placeholder file and optionally update its blob.
 #[derive(Debug, Clone, Default)]
 pub struct Dehydrate<'a> {
+    /// Optional file blob to update.
     pub blob: Option<&'a [u8]>,
 }
 
