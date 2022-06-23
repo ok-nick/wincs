@@ -206,6 +206,7 @@ impl Request {
     }
 }
 
+/// Information about the calling process.
 #[derive(Debug)]
 pub struct Process(CF_PROCESS_INFO);
 
