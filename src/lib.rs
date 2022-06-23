@@ -1,5 +1,11 @@
+/// Contains low-level structs for directly executing Cloud Filter operations.
+///
+/// The [command][crate::command] API is exposed through various higher-level structs, like
+/// [Request][crate::Request] and [Placeholder][crate::Placeholder]. Thus, it is not necessary to
+/// create and call these structs manually unless you need more granular access.
 pub mod command;
 mod error;
+/// Contains traits extending common structs from the [std][std].
 pub mod ext;
 mod filter;
 mod placeholder;
