@@ -92,7 +92,7 @@ impl Placeholder {
         todo!()
     }
 
-    /// Validates the data range in the placeholder is valid.
+    /// Validates the data range in the placeholder file is valid.
     ///
     /// This method should be used in the
     /// [SyncFilter::validate_data][crate::SyncFilter::validate_data] callback.

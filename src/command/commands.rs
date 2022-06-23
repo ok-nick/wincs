@@ -21,6 +21,7 @@ use crate::{
     usn::Usn,
 };
 
+/// Read data from a placeholder file.
 #[derive(Debug, Default)]
 pub struct Read<'a> {
     pub buffer: &'a mut [u8],
@@ -50,6 +51,7 @@ impl Command for Read<'_> {
     }
 }
 
+/// Write data to a placeholder file.
 #[derive(Debug, Clone, Default)]
 pub struct Write<'a> {
     pub buffer: &'a [u8],
@@ -102,6 +104,7 @@ impl Fallible for Write<'_> {
     }
 }
 
+/// Update various properties on a placeholder.
 #[derive(Debug, Clone, Default)]
 pub struct Update<'a> {
     pub mark_sync: bool,
@@ -137,6 +140,7 @@ impl Command for Update<'_> {
     }
 }
 
+/// Create placeholder files/directories.
 #[derive(Debug, Clone, Default)]
 pub struct CreatePlaceholders<'a> {
     pub placeholders: &'a [PlaceholderFile<'a>],
@@ -204,6 +208,7 @@ impl<'a> Fallible for CreatePlaceholders<'a> {
     }
 }
 
+/// Validate the data range in the placeholder file is valid.
 #[derive(Debug, Clone, Default)]
 pub struct Validate {
     pub range: Range<u64>,
@@ -250,6 +255,7 @@ impl Fallible for Validate {
     }
 }
 
+/// Confirm dehydration of the placeholder file and optionally update its blob.
 #[derive(Debug, Clone, Default)]
 pub struct Dehydrate<'a> {
     pub blob: Option<&'a [u8]>,
@@ -298,7 +304,8 @@ impl Fallible for Dehydrate<'_> {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+/// Confirm deletion of the placeholder.
+#[derive(Debug, Clone, Default)]
 pub struct Delete;
 
 impl Command for Delete {
@@ -338,7 +345,9 @@ impl Fallible for Delete {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+
+/// Confirm rename/move of the placeholder.
+#[derive(Debug, Clone, Default)]
 pub struct Rename;
 
 impl Command for Rename {
