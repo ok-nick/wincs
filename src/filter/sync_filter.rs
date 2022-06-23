@@ -4,6 +4,10 @@ use crate::{
     request::Request,
 };
 
+/// Core functions for implementing a Sync Engine.
+///
+/// `Send` and `Sync` are required as the callback could be invoked from an arbitrary thread, [read
+/// here](https://docs.microsoft.com/en-us/windows/win32/api/cfapi/ne-cfapi-cf_callback_type#remarks).
 pub trait SyncFilter: Send + Sync {
     /// A placeholder hydration has been requested. This means that the placeholder should be
     /// populated with its corresponding data on the remote.
