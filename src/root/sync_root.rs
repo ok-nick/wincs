@@ -136,7 +136,7 @@ impl SyncRootId {
     /// The three components of a [SyncRootId][crate::SyncRootId] as described by the specification.
     ///
     /// The order goes as follows:
-    /// (provider-id, security-id, account-name)
+    /// `(provider-id, security-id, account-name)`
     // TODO: This doesn't work properly, it forgets to include the account name
     pub fn to_components(&self) -> (&U16Str, &U16Str, &U16Str) {
         let mut components = Vec::with_capacity(3);
