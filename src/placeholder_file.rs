@@ -143,8 +143,8 @@ impl Default for PlaceholderFile<'_> {
     }
 }
 
+/// Creates multiple placeholder file/directories within the given path.
 pub trait BatchCreate {
-    /// Creates multiple placeholder file/directories within the given path.
     fn create<P: AsRef<Path>>(&mut self, path: P) -> core::Result<Vec<core::Result<Usn>>>;
 }
 
