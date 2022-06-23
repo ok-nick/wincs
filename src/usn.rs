@@ -1,7 +1,12 @@
 // TODO: this module will be for handling usn's and potentially change journals.
 // Usn's should ALWAYS be required and this module should make it easy
 
-/// An Updated Sequence Number (USN) is as an identifier representing the version of a file. Each operation
-/// performed will increment the USN of a file. This identifier is typically used in conjunction
-/// with the NTFS Change Journal.
+/// An Updated Sequence Number (USN) is as an identifier that represents the version of a file. Each
+/// subsequent file operation will increment the USN, allowing you to recognize when a file has
+/// been updated.
+///
+/// A USN is commonly used to prevent a change from happening unless the USN is up to date. For
+/// instance, [FileExt::update][crate::ext::FileExt::update] will not apply the specified changes
+/// unless if the passed USN matches the most recent USN of the file. This avoids applying changes
+/// that may be out of date.
 pub type Usn = u64;
