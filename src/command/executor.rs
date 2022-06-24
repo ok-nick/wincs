@@ -14,6 +14,7 @@ use crate::{
     request::{RawConnectionKey, RawTransferKey},
 };
 
+/// Allows a command to fail with a specified error.
 pub trait Fallible: Command {
     fn fail(
         connection_key: RawConnectionKey,
@@ -22,17 +23,27 @@ pub trait Fallible: Command {
     ) -> core::Result<Self::Result>;
 }
 
+/// A Cloud Filter command used to execute various functions.
 pub trait Command: Sized {
+    /// The [CF_OPERATION_TYPE][windows::Win32::Storage::CloudFilters::CF_OPERATION_TYPE]
+    /// corresponding to the command.
     const OPERATION: CF_OPERATION_TYPE;
+    /// The result of the command, if applicable.
     type Result;
+    /// The union field of
+    /// [CF_OPERATION_PARAMETERS_0][windows::Win32::Storage::CloudFilters::CF_OPERATION_PARAMETERS_0].
     type Field;
 
+    /// Gathers and returns the result of the command.
+    ///
     /// # Safety
-    /// Indexing a union
+    /// It is expected to index the union parameter, hence `unsafe`.
     unsafe fn result(info: CF_OPERATION_PARAMETERS_0) -> Self::Result;
 
+    /// Creates and returns the union.
     fn build(&self) -> CF_OPERATION_PARAMETERS_0;
 
+    /// Executes the command to the platform.
     fn execute(
         &self,
         connection_key: RawConnectionKey,
