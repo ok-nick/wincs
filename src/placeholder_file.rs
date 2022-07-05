@@ -27,7 +27,7 @@ impl<'a> PlaceholderFile<'a> {
         Self::default()
     }
 
-    /// Marks this [PlaceholderFile][crate::PlaceholderFile] as having no children placeholders on
+    /// Marks this [PlaceholderFile][crate::PlaceholderFile] as having no child placeholders on
     /// creation.
     ///
     /// If [PopulationType::Full][crate::PopulationType] is specified on registration, this flag

@@ -11,6 +11,7 @@ use windows::{
 
 use crate::utility::ToHString;
 
+/// An API extension to [Path][std::path::Path]
 pub trait PathExt
 where
     Self: AsRef<Path>,

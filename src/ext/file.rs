@@ -34,7 +34,26 @@ use crate::{
     usn::Usn,
 };
 
+/// An API extension to [File][std::fs::File].
 pub trait FileExt: AsRawHandle {
+    /// Converts a file to a placeholder file, returning the resulting USN.
+    ///
+    /// Restrictions:
+    /// * The file or directory must be the sync root directory itself, or a descendant directory.
+    ///     * [CloudErrorKind::NotUnderSyncRoot][crate::CloudErrorKind::NotUnderSyncRoot]
+    /// * If [ConvertOptions::dehydrate][ConvertOptions::dehydrate] is selected, the sync root must
+    /// not be registered with [HydrationType::AlwaysFull][crate::HydrationType::AlwaysFull].
+    ///     * [CloudErrorKind::NotSupported][crate::CloudErrorKind::NotSupported]
+    /// * If [ConvertOptions::dehydrate][ConvertOptions::dehydrate] is selected, the placeholder
+    /// must not be pinned.
+    ///     * [CloudErrorKind::Pinned][crate::CloudErrorKind::Pinned]
+    /// * The handle must have write access.
+    ///     * [CloudErrorKind::AccessDenied][crate::CloudErrorKind::AccessDenied]
+    ///
+    /// [Read more
+    /// here](https://docs.microsoft.com/en-us/windows/win32/api/cfapi/nf-cfapi-cfconverttoplaceholder#remarks]
+    // TODO: the 4th remark on the link doesn't make sense? Seems to be copied and pasted from
+    // `CfUpdatePlaceholder`.
     fn to_placeholder(&self, options: ConvertOptions) -> core::Result<Usn> {
         let mut usn = MaybeUninit::<i64>::uninit();
         unsafe {
@@ -52,7 +71,13 @@ pub trait FileExt: AsRawHandle {
         }
     }
 
-    // must have write perms
+    /// Converts a placeholder file to a normal file.
+    ///
+    /// Restrictions:
+    /// * If the file is not already hydrated, it will implicitly call
+    /// [SyncFilter::fetch_data][crate::SyncFilter::fetch_data]. If the file can not be hydrated,
+    /// the conversion will fail.
+    /// The handle must have write access.
     fn to_file(&self) -> core::Result<()> {
         unsafe {
             CfRevertPlaceholder(
@@ -63,7 +88,23 @@ pub trait FileExt: AsRawHandle {
         }
     }
 
-    // this could be split into multiple functions to make common patterns easier
+    /// Updates various characteristics of a placeholder.
+    ///
+    /// Restrictions:
+    /// * The file or directory must be the sync root directory itself, or a descendant directory.
+    ///     * [CloudErrorKind::NotUnderSyncRoot][crate::CloudErrorKind::NotUnderSyncRoot]
+    /// * If [UpdateOptions::dehydrate][UpdateOptions::dehydrate] is selected, the sync root must
+    /// not be registered with [HydrationType::AlwaysFull][crate::HydrationType::AlwaysFull].
+    ///     * [CloudErrorKind::NotSupported][crate::CloudErrorKind::NotSupported]
+    /// * If [UpdateOptions::dehydrate][UpdateOptions::dehydrate] is selected, the placeholder
+    /// must not be pinned.
+    ///     * [CloudErrorKind::Pinned][crate::CloudErrorKind::Pinned]
+    /// * If [UpdateOptions::dehydrate][UpdateOptions::dehydrate] is selected, the placeholder
+    /// must be in sync.
+    ///     * [CloudErrorKind::NotInSync][crate::CloudErrorKind::NotInSync]
+    /// * The handle must have write access.
+    ///     * [CloudErrorKind::AccessDenied][crate::CloudErrorKind::AccessDenied]
+    // TODO: this could be split into multiple functions to make common patterns easier
     fn update(&self, usn: Usn, mut options: UpdateOptions) -> core::Result<Usn> {
         let mut usn = usn as i64;
         unsafe {
@@ -82,6 +123,9 @@ pub trait FileExt: AsRawHandle {
         }
     }
 
+    /// Hydrates a placeholder file.
+    // TODO: doc restrictions. I believe the remarks are wrong in that this call requires both read
+    // and write access? https://docs.microsoft.com/en-us/windows/win32/api/cfapi/nf-cfapi-cfhydrateplaceholder#remarks
     fn hydrate<T: RangeBounds<u64>>(&self, range: T) -> core::Result<()> {
         unsafe {
             CfHydratePlaceholder(
@@ -102,21 +146,19 @@ pub trait FileExt: AsRawHandle {
         }
     }
 
+    /// Dehydrates a placeholder file.
     fn dehydrate<T: RangeBounds<u64>>(&self, range: T) -> core::Result<()> {
         dehydrate(self.as_raw_handle(), range, false)
     }
 
+    /// Dehydrates a placeholder file as a system process running in the background. Otherwise, it
+    /// is called on behalf of a logged-in user.
     fn background_dehydrate<T: RangeBounds<u64>>(&self, range: T) -> core::Result<()> {
         dehydrate(self.as_raw_handle(), range, true)
     }
 
-    // handle only needs read access
-    fn read_raw(
-        &self,
-        read_type: ReadType,
-        offset: u64,
-        buffer: &mut [u8],
-    ) -> core::Result<u32> {
+    /// Reads raw data in a placeholder file without invoking the [SyncFilter][crate::SyncFilter].
+    fn read_raw(&self, read_type: ReadType, offset: u64, buffer: &mut [u8]) -> core::Result<u32> {
         // TODO: buffer length must be u32 max
         let mut length = 0;
         unsafe {
@@ -133,39 +175,41 @@ pub trait FileExt: AsRawHandle {
         .map(|_| length)
     }
 
+    /// Gets various characteristics of a placeholder.
     fn placeholder_info(&self) -> core::Result<PlaceholderInfo> {
         // TODO: same as below except finds the size after 2 calls of CfGetPlaceholderInfo
         todo!()
     }
 
-    /// # Safety
-    /// `blob_size` must be the size of the file blob.
-    unsafe fn placeholder_info_unchecked(&self, blob_size: usize) -> core::Result<PlaceholderInfo> {
+    /// Gets various characteristics of a placeholder using the passed blob size.
+    fn placeholder_info_unchecked(&self, blob_size: usize) -> core::Result<PlaceholderInfo> {
         let mut data = vec![0; mem::size_of::<CF_PLACEHOLDER_STANDARD_INFO>() + blob_size];
 
-        CfGetPlaceholderInfo(
-            HANDLE(self.as_raw_handle() as isize),
-            CloudFilters::CF_PLACEHOLDER_INFO_STANDARD,
-            data.as_mut_ptr() as *mut _,
-            data.len() as u32,
-            ptr::null_mut(),
-        )?;
+        unsafe {
+            CfGetPlaceholderInfo(
+                HANDLE(self.as_raw_handle() as isize),
+                CloudFilters::CF_PLACEHOLDER_INFO_STANDARD,
+                data.as_mut_ptr() as *mut _,
+                data.len() as u32,
+                ptr::null_mut(),
+            )?;
+        }
 
         Ok(PlaceholderInfo {
-            info: &data[..=mem::size_of::<CF_PLACEHOLDER_STANDARD_INFO>()]
-                .align_to::<CF_PLACEHOLDER_STANDARD_INFO>()
-                .1[0] as *const _,
+            info: &unsafe {
+                data[..=mem::size_of::<CF_PLACEHOLDER_STANDARD_INFO>()]
+                    .align_to::<CF_PLACEHOLDER_STANDARD_INFO>()
+            }
+            .1[0] as *const _,
             data,
         })
     }
 
-    // if it fails, it will be Err,
-    // if it is not a placeholder, then it will be None
-    // it should instead error with not a placeholder
-    // TODO: why is the value showing 9 in my tests, 9 is not a valid enum?
-    // does it return flags?
+    /// Gets the current state of the placeholder.
+    // TODO: test to ensure this works. I feel like returning an option here is a little odd in the
+    // case of a non parsable state.
     fn placeholder_state(&self) -> core::Result<Option<PlaceholderState>> {
-        let mut info = MaybeUninit::<FILE_ATTRIBUTE_TAG_INFO>::uninit();
+        let mut info = MaybeUninit::<FILE_ATTRIBUTE_TAG_INFO>::zeroed();
         unsafe {
             GetFileInformationByHandleEx(
                 HANDLE(self.as_raw_handle() as isize),
@@ -182,6 +226,7 @@ pub trait FileExt: AsRawHandle {
         }
     }
 
+    /// Sets the pin state of the placeholder.
     fn set_pin_state(&self, state: PinState, options: PinOptions) -> core::Result<()> {
         unsafe {
             CfSetPinState(
@@ -193,49 +238,59 @@ pub trait FileExt: AsRawHandle {
         }
     }
 
+    /// Marks a placeholder as synced.
+    ///
+    /// If the passed [USN][crate::Usn] is outdated, the call will fail.
+    // TODO: must have write access
     fn mark_sync(&self, usn: Usn) -> core::Result<Usn> {
         mark_sync_state(self.as_raw_handle(), true, usn)
     }
 
+    /// Marks a placeholder as not in sync.
+    ///
+    /// If the passed [USN][crate::Usn] is outdated, the call will fail.
+    // TODO: must have write access
     fn mark_unsync(&self, usn: Usn) -> core::Result<Usn> {
         mark_sync_state(self.as_raw_handle(), false, usn)
     }
 
-    fn is_placeholder(&self) -> bool {
-        match self.placeholder_state() {
-            Ok(state) => state.is_some(),
-            Err(..) => false,
-        }
+    /// Returns whether or not the handle is a valid placeholder.
+    fn is_placeholder(&self) -> core::Result<bool> {
+        self.placeholder_state().map(|state| state.is_some())
     }
 
+    /// Gets various characteristics of the sync root.
     fn sync_root_info(&self) -> core::Result<SyncRootInfo> {
         // TODO: this except finds the size after 2 calls of CfGetSyncRootInfoByHandle
         todo!()
     }
 
-    // TODO: create a return value for this
-    /// # Safety
-    /// `blob_size` must be the size of the register blob.
-    unsafe fn sync_root_info_unchecked(&self, blob_size: usize) -> core::Result<SyncRootInfo> {
+    /// Gets various characteristics of a placeholder using the passed blob size.
+    fn sync_root_info_unchecked(&self, blob_size: usize) -> core::Result<SyncRootInfo> {
         let mut data = vec![0; mem::size_of::<CF_SYNC_ROOT_STANDARD_INFO>() + blob_size];
 
-        CfGetSyncRootInfoByHandle(
-            HANDLE(self.as_raw_handle() as isize),
-            CF_SYNC_ROOT_INFO_STANDARD,
-            data.as_mut_ptr() as *mut _,
-            data.len() as u32,
-            ptr::null_mut(),
-        )?;
+        unsafe {
+            CfGetSyncRootInfoByHandle(
+                HANDLE(self.as_raw_handle() as isize),
+                CF_SYNC_ROOT_INFO_STANDARD,
+                data.as_mut_ptr() as *mut _,
+                data.len() as u32,
+                ptr::null_mut(),
+            )?;
+        }
 
         Ok(SyncRootInfo {
-            info: &data[..=mem::size_of::<CF_SYNC_ROOT_STANDARD_INFO>()]
-                .align_to::<CF_SYNC_ROOT_STANDARD_INFO>()
-                .1[0] as *const _,
+            info: &unsafe {
+                data[..=mem::size_of::<CF_SYNC_ROOT_STANDARD_INFO>()]
+                    .align_to::<CF_SYNC_ROOT_STANDARD_INFO>()
+            }
+            .1[0] as *const _,
             data,
         })
     }
 
-    fn in_sync_root() -> bool {
+    /// Returns whether or not the handle is inside of a sync root.
+    fn in_sync_root() -> core::Result<bool> {
         // TODO: this should use the uwp apis
         todo!()
     }
@@ -260,6 +315,8 @@ fn mark_sync_state(handle: RawHandle, sync: bool, usn: Usn) -> core::Result<Usn>
     }
 }
 
+// TODO: is `CfDehydratePlaceholder` deprecated?
+// https://docs.microsoft.com/en-us/answers/questions/723805/what-is-the-behavior-of-file-ranges-in-different-p.html
 fn dehydrate<T: RangeBounds<u64>>(
     handle: RawHandle,
     range: T,
@@ -312,66 +369,90 @@ impl From<ReadType> for CF_PLACEHOLDER_RANGE_INFO_CLASS {
     }
 }
 
+/// Information about a sync root.
 #[derive(Debug)]
 pub struct SyncRootInfo {
     data: Vec<u8>,
     info: *const CF_SYNC_ROOT_STANDARD_INFO,
 }
 
+// TODO: most of the returns only have setters, no getters
 impl SyncRootInfo {
+    /// The file ID of the sync root.
     pub fn file_id(&self) -> u64 {
         unsafe { &*self.info }.SyncRootFileId as u64
     }
 
+    /// The hydration policy of the sync root.
     pub fn hydration_policy(&self) -> HydrationType {
         unsafe { &*self.info }.HydrationPolicy.Primary.into()
     }
 
+    /// The hydration type of the sync root.
     pub fn hydration_type(&self) -> HydrationPolicy {
         unsafe { &*self.info }.HydrationPolicy.Modifier.into()
     }
 
+    /// The population type of the sync root.
     pub fn population_type(&self) -> PopulationType {
         unsafe { &*self.info }.PopulationPolicy.Primary.into()
     }
 
+    /// The attributes supported by the sync root.
     pub fn supported_attributes(&self) -> SupportedAttributes {
         unsafe { &*self.info }.InSyncPolicy.into()
     }
 
+    /// Whether or not hardlinks are allowed by the sync root.
     pub fn hardlinks_allowed(&self) -> bool {
         unsafe { &*self.info }.HardLinkPolicy == CloudFilters::CF_HARDLINK_POLICY_ALLOWED
     }
 
+    /// The status of the sync provider.
     pub fn status(&self) -> ProviderStatus {
         unsafe { &*self.info }.ProviderStatus.into()
     }
 
+    /// The name of the sync provider.
     pub fn provider_name(&self) -> &U16CStr {
         U16CStr::from_slice_truncate(unsafe { &*self.info }.ProviderName.as_slice()).unwrap()
     }
 
+    /// The version of the sync provider.
     pub fn version(&self) -> &U16CStr {
         U16CStr::from_slice_truncate(unsafe { &*self.info }.ProviderVersion.as_slice()).unwrap()
     }
 
+    /// The register blob associated with the sync root.
     pub fn blob(&self) -> &[u8] {
         &self.data[(mem::size_of::<CF_SYNC_ROOT_STANDARD_INFO>() + 1)..]
     }
 }
 
+/// Sync provider status.
 #[derive(Debug, Clone, Copy)]
 pub enum ProviderStatus {
+    /// The sync provider is disconnected.
     Disconnected,
+    /// The sync provider is idle.
     Idle,
+    /// The sync provider is populating a namespace.
     PopulateNamespace,
+    /// The sync provider is populating placeholder metadata.
     PopulateMetadata,
+    /// The sync provider is incrementally syncing placeholder content.
     PopulateContent,
+    /// The sync provider is incrementally syncing placeholder content.
     SyncIncremental,
+    /// The sync provider has fully synced placeholder data.
     SyncFull,
+    /// The sync provider has lost connectivity.
     ConnectivityLost,
-    ClearFlags,
+    // TODO: if setting the sync status is added.
+    // ClearFlags,
+    /// The sync provider has been terminated.
     Terminated,
+    /// The sync provider had an error.
     Error,
 }
 
@@ -386,7 +467,7 @@ impl From<CF_SYNC_PROVIDER_STATUS> for ProviderStatus {
             CloudFilters::CF_PROVIDER_STATUS_SYNC_INCREMENTAL => Self::SyncIncremental,
             CloudFilters::CF_PROVIDER_STATUS_SYNC_FULL => Self::SyncFull,
             CloudFilters::CF_PROVIDER_STATUS_CONNECTIVITY_LOST => Self::ConnectivityLost,
-            CloudFilters::CF_PROVIDER_STATUS_CLEAR_FLAGS => Self::ClearFlags,
+            // CloudFilters::CF_PROVIDER_STATUS_CLEAR_FLAGS => Self::ClearFlags,
             CloudFilters::CF_PROVIDER_STATUS_TERMINATED => Self::Terminated,
             CloudFilters::CF_PROVIDER_STATUS_ERROR => Self::Error,
             _ => unreachable!(),
@@ -407,19 +488,30 @@ impl From<ProviderStatus> for CF_SYNC_PROVIDER_STATUS {
             ProviderStatus::SyncIncremental => CloudFilters::CF_PROVIDER_STATUS_SYNC_INCREMENTAL,
             ProviderStatus::SyncFull => CloudFilters::CF_PROVIDER_STATUS_SYNC_FULL,
             ProviderStatus::ConnectivityLost => CloudFilters::CF_PROVIDER_STATUS_CONNECTIVITY_LOST,
-            ProviderStatus::ClearFlags => CloudFilters::CF_PROVIDER_STATUS_CLEAR_FLAGS,
+            // ProviderStatus::ClearFlags => CloudFilters::CF_PROVIDER_STATUS_CLEAR_FLAGS,
             ProviderStatus::Terminated => CloudFilters::CF_PROVIDER_STATUS_TERMINATED,
             ProviderStatus::Error => CloudFilters::CF_PROVIDER_STATUS_ERROR,
         }
     }
 }
 
+/// The pin state of a placeholder.
+///
+/// [Read more
+/// here](https://docs.microsoft.com/en-us/windows/win32/api/cfapi/ne-cfapi-cf_pin_state#remarks)
 #[derive(Debug, Clone, Copy)]
 pub enum PinState {
+    ///
     Unspecified,
+    /// [SyncFilter::fetch_data][crate::SyncFilter::fetch_data] will be called to hydrate the rest
+    /// of the placeholder's data. Any dehydration requests will fail automatically.
     Pinned,
+    /// [SyncFilter::dehydrate][crate::SyncFilter::dehydrate] will be called to dehydrate the rest
+    /// of the placeholder's data.
     Unpinned,
+    /// The placeholder will never sync to the cloud.
     Excluded,
+    /// The placeholder will inherit the parent placeholder's pin state.
     Inherit,
 }
 
@@ -448,20 +540,27 @@ impl From<CF_PIN_STATE> for PinState {
     }
 }
 
+/// The placeholder pin flags.
 #[derive(Debug, Clone, Copy)]
 pub struct PinOptions(CF_SET_PIN_FLAGS);
 
 impl PinOptions {
+    /// Applies the pin state to all descendants of the placeholder (if the placeholder is a
+    /// directory).
     pub fn pin_descendants(&mut self) -> &mut Self {
         self.0 |= CloudFilters::CF_SET_PIN_FLAG_RECURSE;
         self
     }
 
+    /// Applies the pin state to all descendants of the placeholder excluding the current one (if
+    /// the placeholder is a directory).
     pub fn pin_descendants_not_self(&mut self) -> &mut Self {
         self.0 |= CloudFilters::CF_SET_PIN_FLAG_RECURSE_ONLY;
         self
     }
 
+    /// Stop applying the pin state when the first error is encountered. Otherwise, skip over it
+    /// and keep applying.
     pub fn stop_on_error(&mut self) -> &mut Self {
         self.0 |= CloudFilters::CF_SET_PIN_FLAG_RECURSE_STOP_ON_ERROR;
         self
@@ -474,6 +573,7 @@ impl Default for PinOptions {
     }
 }
 
+/// File to placeholder file conversion parameters.
 #[derive(Debug, Clone)]
 pub struct ConvertOptions<'a> {
     flags: CF_CONVERT_FLAGS,
@@ -481,18 +581,35 @@ pub struct ConvertOptions<'a> {
 }
 
 impl<'a> ConvertOptions<'a> {
+    /// Marks the placeholder as synced.
+    ///
+    /// This flag is used to determine the status of a placeholder shown in the file explorer. It
+    /// is applicable to both files and directories.
+    ///
+    /// A file or directory should be marked as "synced" when it has all of its data and metadata.
+    /// A file that is partially full could still be marked as synced, any remaining data will
+    /// invoke the [SyncFilter::fetch_data][crate::SyncFilter::fetch_data] callback automatically
+    /// if requested.
     pub fn mark_sync(mut self) -> Self {
         self.flags |= CloudFilters::CF_CONVERT_FLAG_MARK_IN_SYNC;
         self
     }
 
-    // can only be called for files
+    /// Dehydrate the placeholder after conversion.
+    ///
+    /// This flag is only applicable to files.
     pub fn dehydrate(mut self) -> Self {
         self.flags |= CloudFilters::CF_CONVERT_FLAG_DEHYDRATE;
         self
     }
 
-    // can only be called for directories
+    /// Marks the placeholder as having no child placeholders on creation.
+    ///
+    /// If [PopulationType::Full][crate::PopulationType] is specified on registration, this flag
+    /// will prevent [SyncFilter::fetch_placeholders][crate::SyncFilter::fetch_placeholders] from
+    /// being called for this placeholder.
+    ///
+    /// Only applicable to placeholder directories.
     pub fn has_no_children(mut self) -> Self {
         self.flags |= CloudFilters::CF_CONVERT_FLAG_ENABLE_ON_DEMAND_POPULATION;
         self
@@ -508,13 +625,19 @@ impl<'a> ConvertOptions<'a> {
 
     /// Forces the conversion of a non-cloud placeholder file to a cloud placeholder file.
     ///
-    /// Placeholder files are a part of the NTFS file system and thus a placeholder not associated
+    /// Placeholder files are built into the NTFS file system and thus, a placeholder not associated
     /// with the sync root is possible.
     pub fn force(mut self) -> Self {
         self.flags |= CloudFilters::CF_CONVERT_FLAG_FORCE_CONVERT_TO_CLOUD_FILE;
         self
     }
 
+    /// A buffer of bytes stored with the file that could be accessed through a
+    /// [Request::file_blob][crate::Request::file_blob] or
+    /// [FileExit::placeholder_info][crate::ext::FileExt::placeholder_info].
+    ///
+    /// The buffer must not exceed
+    /// [4KiB](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Storage/CloudFilters/constant.CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH.html).
     pub fn blob(mut self, blob: &'a [u8]) -> Self {
         assert!(
             blob.len() <= CloudFilters::CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH as usize,
@@ -536,6 +659,7 @@ impl Default for ConvertOptions<'_> {
     }
 }
 
+/// Placeholder update parameters.
 #[derive(Debug, Clone)]
 pub struct UpdateOptions<'a> {
     metadata: Option<Metadata>,
@@ -545,6 +669,7 @@ pub struct UpdateOptions<'a> {
 }
 
 impl<'a> UpdateOptions<'a> {
+    ///
     pub fn metadata(mut self, metadata: Metadata) -> Self {
         self.metadata = Some(metadata);
         self
