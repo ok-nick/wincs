@@ -108,7 +108,7 @@ impl<'a> PlaceholderFile<'a> {
 
         // TODO: handle unwraps
         let mut file_name = U16CString::from_os_str(path.file_name().unwrap()).unwrap();
-        self.0.RelativeFileName.0 = unsafe { file_name.as_mut_ptr() };
+        self.0.RelativeFileName.0 = file_name.as_mut_ptr();
 
         unsafe {
             CfCreatePlaceholders(
