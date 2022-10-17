@@ -501,7 +501,7 @@ impl From<ProviderStatus> for CF_SYNC_PROVIDER_STATUS {
 /// here](https://docs.microsoft.com/en-us/windows/win32/api/cfapi/ne-cfapi-cf_pin_state#remarks)
 #[derive(Debug, Clone, Copy)]
 pub enum PinState {
-    ///
+    /// The platform could decide freely.
     Unspecified,
     /// [SyncFilter::fetch_data][crate::SyncFilter::fetch_data] will be called to hydrate the rest
     /// of the placeholder's data. Any dehydration requests will fail automatically.
