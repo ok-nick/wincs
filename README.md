@@ -8,6 +8,9 @@
   </p>
 </div>
 
+> **Warning**
+> Read more about the future of `wincs` in [issue #8](https://github.com/ok-nick/wincs/issues/8).
+
 `wincs` is a safe and idiomatic wrapper around the native [Windows Cloud Filter API](https://docs.microsoft.com/en-us/windows/win32/cfapi/build-a-cloud-file-sync-engine). The Cloud Filter API enables developers to implement their own remote file system from within user space. It is much like [FUSE](#why-not-fuse), although it contains many first-class Windows features that are only available through its API.
 For example:
 * [Placeholder files](#what-are-placeholders)
@@ -36,11 +39,6 @@ For example:
 * TODO: There is also a new API for custom UI, IStorageProviderStatusUISource
 
 As of right now, the Cloud Filter API is used in production by OneDrive, Google Drive, Dropbox, and many other clients.
-
-## TODO
-Documentation needs to be added and refined. Grep `TODO` to find a list of unsolved issues. In addition, there are many unimplemented features included with `TODO` comments. The API is subject to change and I am open to opinions for change. The [examples directory](https://github.com/ok-nick/wincs/tree/main/examples) is outdated and needs refinement, as well as commenting. CI and CD are also needed.
-
-If anyone is interested in contributing, feel free to leave an issue or PR.
 
 ## Examples
 Below is a simple snippet of implementing a sync engine. For more, in-depth examples, please check out the [examples directory](https://github.com/ok-nick/wincs/tree/main/examples).
