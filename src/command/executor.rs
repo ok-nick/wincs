@@ -65,7 +65,7 @@ pub fn execute<C: Command>(
                 Type: C::OPERATION,
                 ConnectionKey: CF_CONNECTION_KEY(connection_key),
                 TransferKey: transfer_key,
-                CorrelationVector: ptr::null_mut(),
+                CorrelationVector: ptr::null(),
                 SyncStatus: ptr::null(),
                 // https://docs.microsoft.com/en-us/answers/questions/749979/what-is-a-requestkey-cfapi.html
                 RequestKey: CloudFilters::CF_REQUEST_KEY_DEFAULT as i64,

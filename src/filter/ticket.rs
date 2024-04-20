@@ -6,6 +6,7 @@ use crate::{
     command::{self, Command, Fallible},
     error::CloudErrorKind,
     request::{RawConnectionKey, RawTransferKey},
+    PlaceholderFile, Usn,
 };
 
 /// A ticket for the [SyncFilter::fetch_data][crate::SyncFilter::fetch_data] callback.
@@ -74,6 +75,19 @@ impl FetchPlaceholders {
             connection_key,
             transfer_key,
         }
+    }
+
+    /// Returns the list of placeholders.
+    pub fn pass_with_placeholder<'a>(
+        &self,
+        placeholders: impl Into<Option<&'a [PlaceholderFile<'a>]>>,
+        total: u64,
+    ) -> core::Result<Vec<core::Result<Usn>>> {
+        command::CreatePlaceholders {
+            placeholders: placeholders.into(),
+            total,
+        }
+        .execute(self.connection_key, self.transfer_key)
     }
 
     /// Fail the callback with the specified error.

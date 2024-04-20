@@ -151,7 +151,7 @@ impl Command for Update<'_> {
 #[derive(Debug, Clone, Default)]
 pub struct CreatePlaceholders<'a> {
     /// The placeholders to create.
-    pub placeholders: &'a [PlaceholderFile<'a>],
+    pub placeholders: Option<&'a [PlaceholderFile<'a>]>, // FIXME: placeholder should be mutable
     /// The total amount of placeholders that are a child of the current directory.
     pub total: u64,
 }
@@ -182,11 +182,17 @@ impl Command for CreatePlaceholders<'_> {
     fn build(&self) -> CF_OPERATION_PARAMETERS_0 {
         CF_OPERATION_PARAMETERS_0 {
             TransferPlaceholders: CF_OPERATION_PARAMETERS_0_7 {
-                Flags: CloudFilters::CF_OPERATION_TRANSFER_PLACEHOLDERS_FLAG_NONE,
+                Flags: CloudFilters::CF_OPERATION_TRANSFER_PLACEHOLDERS_FLAG_DISABLE_ON_DEMAND_POPULATION,
                 CompletionStatus: Foundation::STATUS_SUCCESS,
                 PlaceholderTotalCount: self.total as i64,
-                PlaceholderArray: self.placeholders.as_ptr() as *mut _,
-                PlaceholderCount: self.placeholders.len() as u32,
+                PlaceholderArray: self
+                    .placeholders
+                    .map(|placeholders| placeholders.as_ptr() as *mut _)  // FIXME
+                    .unwrap_or_else(|| ptr::null_mut()),
+                PlaceholderCount: self
+                    .placeholders
+                    .map(|placeholders| placeholders.len() as u32)
+                    .unwrap_or(0),
                 EntriesProcessed: 0,
             },
         }
@@ -214,6 +220,7 @@ impl<'a> Fallible for CreatePlaceholders<'a> {
             connection_key,
             transfer_key,
         )
+        .inspect(|res| println!("CreatePlaceholders: {:?}", res))
     }
 }
 

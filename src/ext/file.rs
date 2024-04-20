@@ -265,7 +265,7 @@ pub trait FileExt: AsRawHandle {
     }
 
     /// Gets various characteristics of a placeholder using the passed blob size.
-    fn sync_root_info_unchecked(&self, blob_size: usize) -> core::Result<SyncRootInfo> {
+    unsafe fn sync_root_info_unchecked(&self, blob_size: usize) -> core::Result<SyncRootInfo> {
         let mut data = vec![0; mem::size_of::<CF_SYNC_ROOT_STANDARD_INFO>() + blob_size];
 
         unsafe {
@@ -609,7 +609,7 @@ impl<'a> ConvertOptions<'a> {
     /// being called for this placeholder.
     ///
     /// Only applicable to placeholder directories.
-    pub fn has_no_children(mut self) -> Self {
+    pub fn has_children(mut self) -> Self {
         self.flags |= CloudFilters::CF_CONVERT_FLAG_ENABLE_ON_DEMAND_POPULATION;
         self
     }
