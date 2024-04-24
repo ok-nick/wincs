@@ -189,7 +189,7 @@ impl Metadata {
     pub fn directory() -> Self {
         Self(CF_FS_METADATA {
             BasicInfo: FILE_BASIC_INFO {
-                FileAttributes: FILE_ATTRIBUTE_DIRECTORY.0 | FILE_ATTRIBUTE_RECALL_ON_OPEN.0,
+                FileAttributes: FILE_ATTRIBUTE_DIRECTORY.0,
                 ..Default::default()
             },
             ..Default::default()

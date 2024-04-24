@@ -1,5 +1,5 @@
 use std::{
-    env::{self, var},
+    env,
     ffi::OsStr,
     fs::{self, File},
     io::{self, BufWriter, Read, Seek, SeekFrom, Write},
@@ -37,7 +37,7 @@ pub struct FileBlob {
 }
 
 fn main() {
-    let tcp = TcpStream::connect(var("SERVER").unwrap()).unwrap();
+    let tcp = TcpStream::connect(env::var("SERVER").unwrap()).unwrap();
     let mut session = Session::new().unwrap();
     session.set_blocking(true);
     session.set_tcp_stream(tcp);
@@ -51,9 +51,9 @@ fn main() {
 
     let sftp = session.sftp().unwrap();
 
-    let mut builder = SyncRootIdBuilder::new(U16String::from_str(PROVIDER_NAME));
-    builder.user_security_id(SecurityId::current_user().unwrap());
-    let sync_root_id = builder.build();
+    let sync_root_id = SyncRootIdBuilder::new(U16String::from_str(PROVIDER_NAME))
+        .user_security_id(SecurityId::current_user().unwrap())
+        .build();
 
     let client_path = get_client_path();
     if !sync_root_id.is_registered().unwrap() {

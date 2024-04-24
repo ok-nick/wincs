@@ -220,7 +220,6 @@ impl<'a> Fallible for CreatePlaceholders<'a> {
             connection_key,
             transfer_key,
         )
-        .inspect(|res| println!("CreatePlaceholders: {:?}", res))
     }
 }
 
