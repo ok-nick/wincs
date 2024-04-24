@@ -76,7 +76,6 @@ impl FetchPlaceholders {
         }
     }
 
-
     /// Fail the callback with the specified error.
     pub fn fail(&self, error_kind: CloudErrorKind) -> core::Result<()> {
         command::CreatePlaceholders::fail(self.connection_key, self.transfer_key, error_kind)

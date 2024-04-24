@@ -356,7 +356,6 @@ impl Fallible for Delete {
     }
 }
 
-
 /// Confirm rename/move of the placeholder.
 #[derive(Debug, Clone, Default)]
 pub struct Rename;
