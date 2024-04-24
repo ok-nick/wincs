@@ -9,7 +9,7 @@ use windows::{
     Win32::{
         Storage::CloudFilters::{self, CfConnectSyncRoot, CF_CONNECT_FLAGS},
         System::{
-            Com::{self, CoCreateInstance, CoInitializeEx, COINIT_MULTITHREADED},
+            Com::{self, CoCreateInstance},
             Search::{self, ISearchCatalogManager, ISearchManager},
         },
     },
@@ -27,7 +27,6 @@ pub struct Session(CF_CONNECT_FLAGS);
 impl Session {
     /// Create a new [Session][crate::Session].
     pub fn new() -> Self {
-        unsafe { CoInitializeEx(std::ptr::null(), COINIT_MULTITHREADED) }.unwrap();
         Self::default()
     }
 

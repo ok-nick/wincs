@@ -9,10 +9,7 @@ use windows::{
             CloudFilters::{
                 self, CfCreatePlaceholders, CF_FS_METADATA, CF_PLACEHOLDER_CREATE_INFO,
             },
-            FileSystem::{
-                FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_RECALL_ON_OPEN,
-                FILE_BASIC_INFO,
-            },
+            FileSystem::{FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_NORMAL, FILE_BASIC_INFO},
         },
     },
 };
