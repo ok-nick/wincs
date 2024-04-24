@@ -1,0 +1,42 @@
+name: check
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "**.rs"
+      - "**/Cargo.toml"
+      - ".github/workflows/check.yml"
+  pull_request:
+    paths:
+      - "**.rs"
+      - "**/Cargo.toml"
+      - ".github/workflows/check.yml"
+
+jobs:
+  lint:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy 
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: clippy
+        run: cargo clippy --all-features
+        env:
+          RUSTFLAGS: "-Dwarnings"
+  
+  format:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: rustfmt
+        run: cargo fmt --all -- --check
