@@ -261,6 +261,7 @@ impl Delete {
 
 /// Information for the [SyncFilter::deleted][crate::SyncFilter::deleted] callback.
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 pub struct Deleted(pub(crate) CF_CALLBACK_PARAMETERS_0_4);
 
 /// Information for the [SyncFilter::rename][crate::SyncFilter::rename] callback.

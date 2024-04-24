@@ -1,8 +1,9 @@
 use std::{
     io::{self, Seek, SeekFrom},
     mem::ManuallyDrop,
+    ops::Range,
     path::{Path, PathBuf},
-    ptr, ops::Range,
+    ptr,
 };
 
 use widestring::U16CString;
@@ -78,8 +79,8 @@ impl Placeholder {
     // if I let the user pass in the transfer key, then I somehow need to get the file path to support set_progress
     // if I allow getting a transfer key from a path, then I somehow need to let them specify read/write access (probably?)
     pub fn from_path<P: AsRef<Path>>(
-        connection_key: RawConnectionKey,
-        path: P,
+        _connection_key: RawConnectionKey,
+        _path: P,
     ) -> core::Result<Self> {
         // let file = File::open(path).unwrap();
         // let key = unsafe { CfGetTransferKey(HANDLE(file.as_raw_handle() as isize))?};
@@ -249,8 +250,8 @@ impl Seek for Placeholder {
     fn seek(&mut self, position: SeekFrom) -> io::Result<u64> {
         self.position = match position {
             SeekFrom::Start(offset) => offset,
-            SeekFrom::Current(offset) => (self.position + offset as u64),
-            SeekFrom::End(offset) => (self.file_size + offset as u64),
+            SeekFrom::Current(offset) => self.position + offset as u64,
+            SeekFrom::End(offset) => self.file_size + offset as u64,
         };
 
         Ok(self.position)

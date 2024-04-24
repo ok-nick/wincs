@@ -50,7 +50,7 @@ impl<T> Connection<T> {
 
     #[inline]
     fn disconnect_ref(&self) -> core::Result<()> {
-        unsafe { CfDisconnectSyncRoot(&CF_CONNECTION_KEY(self.connection_key)) }
+        unsafe { CfDisconnectSyncRoot(CF_CONNECTION_KEY(self.connection_key)) }
     }
 }
 
