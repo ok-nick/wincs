@@ -352,12 +352,10 @@ impl SyncFilter for Filter {
             })
             .collect::<Vec<_>>();
 
-        ticket
-            .pass_with_placeholder(
-                (!placeholders.is_empty()).then_some(&*placeholders),
-                placeholders.len() as _,
-            )
-            .unwrap();
+        match placeholders.is_empty() {
+            true => ticket.pass().unwrap(),
+            false => ticket.pass_with_placeholder(&*placeholders).unwrap(),
+        };
     }
 
     fn closed(&self, request: Request, info: info::Closed) {

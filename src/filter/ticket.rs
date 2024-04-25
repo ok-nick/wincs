@@ -77,15 +77,23 @@ impl FetchPlaceholders {
         }
     }
 
+    /// Returns the empty list of placeholders.
+    pub fn pass<'a>(&self) -> core::Result<Vec<core::Result<Usn>>> {
+        command::CreatePlaceholders {
+            placeholders: None,
+            total: 0,
+        }
+        .execute(self.connection_key, self.transfer_key)
+    }
+
     /// Returns the list of placeholders.
     pub fn pass_with_placeholder<'a>(
         &self,
-        placeholders: impl Into<Option<&'a [PlaceholderFile<'a>]>>,
-        total: u64,
+        placeholders: &'a [PlaceholderFile<'a>],
     ) -> core::Result<Vec<core::Result<Usn>>> {
         command::CreatePlaceholders {
-            placeholders: placeholders.into(),
-            total,
+            placeholders: Some(placeholders),
+            total: placeholders.len() as _,
         }
         .execute(self.connection_key, self.transfer_key)
     }
