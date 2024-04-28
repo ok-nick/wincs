@@ -188,7 +188,7 @@ impl Command for CreatePlaceholders<'_> {
                 PlaceholderArray: self
                     .placeholders
                     .map(|placeholders| placeholders.as_ptr() as *mut _)  // FIXME
-                    .unwrap_or_else(|| ptr::null_mut()),
+                    .unwrap_or_else(ptr::null_mut),
                 PlaceholderCount: self
                     .placeholders
                     .map(|placeholders| placeholders.len() as u32)

@@ -264,6 +264,7 @@ pub trait FileExt: AsRawHandle {
         todo!()
     }
 
+    #[allow(clippy::missing_safety_doc)]
     /// Gets various characteristics of a placeholder using the passed blob size.
     unsafe fn sync_root_info_unchecked(&self, blob_size: usize) -> core::Result<SyncRootInfo> {
         let mut data = vec![0; mem::size_of::<CF_SYNC_ROOT_STANDARD_INFO>() + blob_size];

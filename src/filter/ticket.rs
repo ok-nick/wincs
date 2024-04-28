@@ -78,7 +78,7 @@ impl FetchPlaceholders {
     }
 
     /// Returns the empty list of placeholders.
-    pub fn pass<'a>(&self) -> core::Result<Vec<core::Result<Usn>>> {
+    pub fn pass(&self) -> core::Result<Vec<core::Result<Usn>>> {
         command::CreatePlaceholders {
             placeholders: None,
             total: 0,
