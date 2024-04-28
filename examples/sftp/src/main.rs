@@ -5,7 +5,7 @@ use std::{
     io::{self, BufWriter, Read, Seek, SeekFrom, Write},
     net::TcpStream,
     os::windows::fs::OpenOptionsExt,
-    path::{Path, PathBuf},
+    path::Path,
     sync::mpsc,
 };
 
@@ -18,8 +18,7 @@ use wincs::{
     filter::{info, ticket, SyncFilter},
     placeholder_file::{Metadata, PlaceholderFile},
     request::Request,
-    CloudErrorKind, PopulationType, Registration, SecurityId, Session as WincsSession,
-    SyncRootIdBuilder,
+    CloudErrorKind, PopulationType, Registration, SecurityId, SyncRootIdBuilder,
 };
 
 // max should be 65536, this is done both in term-scp and sshfs because it's the
@@ -72,15 +71,15 @@ fn main() {
             .unwrap();
     }
 
-    covert_to_placeholder(PathBuf::from(&client_path));
+    convert_to_placeholder(Path::new(&client_path));
 
-    let conn = WincsSession::new()
+    let connection = wincs::Session::new()
         .connect(&client_path, Filter { sftp })
         .unwrap();
 
     wait_for_ctrlc();
 
-    conn.disconnect().unwrap();
+    connection.disconnect().unwrap();
     sync_root_id.unregister().unwrap();
 }
 
@@ -88,23 +87,29 @@ fn get_client_path() -> String {
     env::var("CLIENT_PATH").unwrap()
 }
 
-fn covert_to_placeholder(path: PathBuf) {
+fn convert_to_placeholder(path: &Path) {
     for entry in path.read_dir().unwrap() {
         let entry = entry.unwrap();
+        let is_dir = entry.path().is_dir();
+
         let mut open_options = File::options();
         open_options.read(true);
-        if entry.path().is_dir() {
+        if is_dir {
+            // FILE_FLAG_BACKUP_SEMANTICS, needed to obtain handle to directory
             open_options.custom_flags(0x02000000);
         }
-        let f = open_options.open(entry.path()).unwrap();
-        let options = if entry.path().is_dir() {
+
+        let convert_options = if is_dir {
             ConvertOptions::default().has_children()
         } else {
             ConvertOptions::default()
         };
-        f.to_placeholder(options).unwrap();
-        if entry.path().is_dir() {
-            covert_to_placeholder(entry.path());
+
+        let file = open_options.open(entry.path()).unwrap();
+        file.to_placeholder(convert_options).unwrap();
+
+        if is_dir {
+            convert_to_placeholder(&entry.path());
         }
     }
 }
@@ -172,8 +177,6 @@ impl Filter {
 // TODO: everything is just forwarded to external functions... This should be
 // changed in the wrapper api
 impl SyncFilter for Filter {
-    // type Error = SftpError;
-
     // TODO: handle unwraps
     fn fetch_data(&self, request: Request, ticket: ticket::FetchData, info: info::FetchData) {
         println!("fetch_data {:?}", request.file_blob());
@@ -184,6 +187,7 @@ impl SyncFilter for Filter {
         let end = range.end;
         let mut position = range.start;
 
+        // TODO: allow callback to return Result in SyncFilter
         let res = || -> Result<(), _> {
             let mut server_file = self
                 .sftp
@@ -273,7 +277,7 @@ impl SyncFilter for Filter {
 
                     match info.source_in_scope() {
                         // TODO: use fs::copy or fs::rename, whatever it is to move the local files,
-                        // then use CovertToPlaceholder. I'm not sure if I have to do this recursively
+                        // then use ConvertToPlaceholder. I'm not sure if I have to do this recursively
                         // for each file or only the top-level folder TODO: which
                         // rename flags do I use? how do I know if I should be overwriting?
                         true => self
@@ -314,9 +318,9 @@ impl SyncFilter for Filter {
         info: info::FetchPlaceholders,
     ) {
         println!(
-            "fetch_placeholders {:?} {}",
+            "fetch_placeholders {:?} {:?}",
             request.path(),
-            info.pattern().to_string().unwrap()
+            info.pattern()
         );
         let absolute = request.path();
         let client_path = get_client_path();
@@ -347,17 +351,10 @@ impl SyncFilter for Filter {
                     .overwrite()
                     // .mark_sync() // need this?
                     .blob(path.as_os_str().as_encoded_bytes())
-
-                // if stat.is_file() {
-                //     placeholder = placeholder.has_no_children();
-                // }
             })
             .collect::<Vec<_>>();
 
-        match placeholders.is_empty() {
-            true => ticket.pass().unwrap(),
-            false => ticket.pass_with_placeholder(&*placeholders).unwrap(),
-        };
+        ticket.pass_with_placeholder(&placeholders).unwrap();
     }
 
     fn closed(&self, request: Request, info: info::Closed) {

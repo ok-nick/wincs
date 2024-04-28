@@ -114,8 +114,8 @@ impl<'a> PlaceholderFile<'a> {
     /// [FileExt::to_placeholder][crate::ext::FileExt::to_placeholder] for efficiency purposes. If you
     /// need to create multiple placeholders, consider using [BatchCreate][crate::BatchCreate].
     ///
-    /// If you need to create placeholders from a callback, do not use this method. Instead, use
-    /// [Request::create_placeholder][crate::Request::create_placeholder].
+    /// If you need to create placeholders from the [SyncFilter::fetch_placeholders][crate::SyncFilter::fetch_placeholders] callback, do not use this method. Instead, use
+    /// [FetchPlaceholders::pass_with_placeholders][crate::ticket::FetchPlaceholders::pass_with_placeholders].
     pub fn create<P: AsRef<Path>>(mut self, parent: impl AsRef<Path>) -> core::Result<Usn> {
         unsafe {
             CfCreatePlaceholders(

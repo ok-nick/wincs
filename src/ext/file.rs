@@ -603,11 +603,9 @@ impl<'a> ConvertOptions<'a> {
         self
     }
 
-    /// Marks the placeholder as having no child placeholders on creation.
-    ///
-    /// If [PopulationType::Full][crate::PopulationType] is specified on registration, this flag
-    /// will prevent [SyncFilter::fetch_placeholders][crate::SyncFilter::fetch_placeholders] from
-    /// being called for this placeholder.
+    // TODO: make the name of this function more specific
+    /// Marks the placeholder as "partially full," such that [SyncFilter::fetch_placeholders][crate::SyncFilter::fetch_placeholders]
+    /// will be invoked when this directory is next accessed so that the remaining placeholders are inserted.
     ///
     /// Only applicable to placeholder directories.
     pub fn has_children(mut self) -> Self {
