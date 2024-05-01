@@ -146,58 +146,6 @@ impl Request {
     /// activity (meaning, no placeholder methods are invoked). If you are prone to this issue,
     /// consider calling this method or call placeholder methods more frequently.
     pub fn reset_timeout() {}
-
-    // /// Creates a placeholder file under the current placeholder directory.
-    // ///
-    // /// This function will fail if the placeholder associated with the current callback is not a
-    // /// directory. Use [Request::path][crate::Request::path] to identify if the placeholder is a
-    // /// directory.
-    // #[inline]
-    // pub fn create_placeholder(&self, placeholder: PlaceholderFile) -> core::Result<Usn> {
-    //     self.create_placeholders(&[placeholder])
-    //         .map(|mut x| x.remove(0))?
-    // }
-
-    // /// Creates multiple placeholder files at once. The returned list contains the resulting
-    // /// [Usn][crate::Usn] wrapped in a [Result][std::result::Result] to signify whether or not the
-    // /// placeholder was created successfully.
-    // ///
-    // /// This function will fail if the placeholder associated with the current callback is not a
-    // /// directory. Use the [Request::path][crate::Request::path] method to identify if the
-    // /// placeholder is a directory.
-    // #[inline]
-    // pub fn create_placeholders(
-    //     &self,
-    //     placeholders: &[PlaceholderFile],
-    // ) -> core::Result<Vec<core::Result<Usn>>> {
-    //     self.create_placeholders_with_total(placeholders, placeholders.len() as u64)
-    // }
-
-    // /// Creates multiple placeholder files at once. The returned list contains the resulting
-    // /// [Usn][crate::Usn] wrapped in a [Result][std::result::Result] to signify whether or not the placeholder was
-    // /// created successfully.
-    // ///
-    // /// The `total` parameter specifies the total number of placeholder files that are a child of
-    // /// the current placeholder directory. If this value is unknown or is the length of the passed
-    // /// slice, consider calling
-    // /// [Request::create_placeholders][crate::Request::create_placeholders].
-    // ///
-    // /// This method is equivalent to calling
-    // /// [CreatePlaceholders::execute][crate::command::CreatePlaceholders::execute].
-    // ///
-    // /// This function will fail if the placeholder associated with the current callback is not a
-    // /// directory. Use the [path][crate::Request::path] method to identify if the placeholder is a directory.
-    // pub fn create_placeholders_with_total(
-    //     &self,
-    //     placeholders: &'a mut [PlaceholderFile],
-    //     total: u64,
-    // ) -> core::Result<Vec<core::Result<Usn>>> {
-    //     CreatePlaceholders {
-    //         placeholders: Some(placeholders),
-    //         total,
-    //     }
-    //     .execute(self.connection_key(), self.transfer_key())
-    // }
 }
 
 /// Information about the calling process.
