@@ -251,6 +251,7 @@ impl SyncFilter for Filter {
                     .unlink(path)
                     .map_err(|_| CloudErrorKind::InvalidRequest)?,
             }
+            ticket.pass().unwrap();
             Ok(())
         }();
 
@@ -297,6 +298,7 @@ impl SyncFilter for Filter {
                     }))
                     .map_err(|_| CloudErrorKind::InvalidRequest)?,
             }
+            ticket.pass().unwrap();
             Ok(())
         }();
 

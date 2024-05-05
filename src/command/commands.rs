@@ -1,4 +1,4 @@
-use std::{ops::Range, ptr, slice};
+use std::{iter, ops::Range, ptr, slice};
 
 use windows::{
     core,
@@ -165,6 +165,10 @@ impl Command for CreatePlaceholders<'_> {
     unsafe fn result(info: CF_OPERATION_PARAMETERS_0) -> Self::Result {
         // iterate over the placeholders and return, in a new vector, whether or
         // not they were created with their new USN
+        if info.TransferPlaceholders.PlaceholderCount == 0 {
+            return vec![];
+        }
+
         slice::from_raw_parts(
             info.TransferPlaceholders.PlaceholderArray,
             info.TransferPlaceholders.PlaceholderCount as usize,
