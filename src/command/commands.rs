@@ -1,4 +1,4 @@
-use std::{iter, ops::Range, ptr, slice};
+use std::{ops::Range, ptr, slice};
 
 use windows::{
     core,

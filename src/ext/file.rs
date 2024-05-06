@@ -667,7 +667,6 @@ pub struct UpdateOptions<'a> {
 }
 
 impl<'a> UpdateOptions<'a> {
-    ///
     pub fn metadata(mut self, metadata: Metadata) -> Self {
         self.metadata = Some(metadata);
         self
