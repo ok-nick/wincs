@@ -2,14 +2,14 @@ use std::{fs, marker::PhantomData, os::windows::prelude::MetadataExt, path::Path
 
 use widestring::U16CString;
 use windows::{
-    core,
+    core::{self, PCWSTR},
     Win32::{
         Foundation,
         Storage::{
             CloudFilters::{
                 self, CfCreatePlaceholders, CF_FS_METADATA, CF_PLACEHOLDER_CREATE_INFO,
             },
-            FileSystem::FILE_BASIC_INFO,
+            FileSystem::{FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_NORMAL, FILE_BASIC_INFO},
         },
     },
 };
@@ -18,13 +18,26 @@ use crate::usn::Usn;
 
 // TODO: this struct could probably have a better name to represent files/dirs
 /// A builder for creating new placeholder files/directories.
+#[repr(C)]
 #[derive(Debug)]
 pub struct PlaceholderFile<'a>(CF_PLACEHOLDER_CREATE_INFO, PhantomData<&'a ()>);
 
 impl<'a> PlaceholderFile<'a> {
     /// Creates a new [PlaceholderFile][crate::PlaceholderFile].
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(relative_path: impl AsRef<Path>) -> Self {
+        Self(
+            CF_PLACEHOLDER_CREATE_INFO {
+                RelativeFileName: PCWSTR(
+                    U16CString::from_os_str(relative_path.as_ref())
+                        .unwrap()
+                        .into_raw(),
+                ),
+                Flags: CloudFilters::CF_PLACEHOLDER_CREATE_FLAG_NONE,
+                Result: Foundation::S_OK,
+                ..Default::default()
+            },
+            PhantomData,
+        )
     }
 
     /// Marks this [PlaceholderFile][crate::PlaceholderFile] as having no child placeholders on
@@ -101,19 +114,12 @@ impl<'a> PlaceholderFile<'a> {
     /// [FileExt::to_placeholder][crate::ext::FileExt::to_placeholder] for efficiency purposes. If you
     /// need to create multiple placeholders, consider using [BatchCreate][crate::BatchCreate].
     ///
-    /// If you need to create placeholders from a callback, do not use this method. Instead, use
-    /// [Request::create_placeholder][crate::Request::create_placeholder].
-    pub fn create<P: AsRef<Path>>(mut self, path: P) -> core::Result<Usn> {
-        let path = path.as_ref();
-
-        // TODO: handle unwraps
-        let mut file_name = U16CString::from_os_str(path.file_name().unwrap()).unwrap();
-        self.0.RelativeFileName.0 = file_name.as_mut_ptr();
-
+    /// If you need to create placeholders from the [SyncFilter::fetch_placeholders][crate::SyncFilter::fetch_placeholders] callback, do not use this method. Instead, use
+    /// [FetchPlaceholders::pass_with_placeholders][crate::ticket::FetchPlaceholders::pass_with_placeholders].
+    pub fn create<P: AsRef<Path>>(mut self, parent: impl AsRef<Path>) -> core::Result<Usn> {
         unsafe {
             CfCreatePlaceholders(
-                // TODO: handle unwrap
-                path.parent().unwrap().as_os_str(),
+                parent.as_ref().as_os_str(),
                 &mut self as *mut _ as *mut _,
                 1,
                 CloudFilters::CF_CREATE_FLAG_NONE,
@@ -125,21 +131,10 @@ impl<'a> PlaceholderFile<'a> {
     }
 }
 
-impl Default for PlaceholderFile<'_> {
-    fn default() -> Self {
-        Self(
-            CF_PLACEHOLDER_CREATE_INFO {
-                RelativeFileName: Default::default(),
-                FsMetadata: Default::default(),
-                FileIdentity: ptr::null_mut(),
-                // this is required only for files, who knows why
-                FileIdentityLength: 1,
-                Flags: CloudFilters::CF_PLACEHOLDER_CREATE_FLAG_NONE,
-                Result: Foundation::S_OK,
-                CreateUsn: 0,
-            },
-            PhantomData,
-        )
+impl Drop for PlaceholderFile<'_> {
+    fn drop(&mut self) {
+        // Safety: `self.0.RelativeFileName.0` is a valid pointer to a valid UTF-16 string
+        drop(unsafe { U16CString::from_ptr_str(self.0.RelativeFileName.0) })
     }
 }
 
@@ -174,13 +169,28 @@ impl BatchCreate for [PlaceholderFile<'_>] {
 }
 
 /// The metadata for a [PlaceholderFile][crate::PlaceholderFile].
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct Metadata(pub(crate) CF_FS_METADATA);
 
 impl Metadata {
-    /// Creates a new [Metadata][crate::Metadata].
-    pub fn new() -> Self {
-        Self::default()
+    pub fn file() -> Self {
+        Self(CF_FS_METADATA {
+            BasicInfo: FILE_BASIC_INFO {
+                FileAttributes: FILE_ATTRIBUTE_NORMAL.0,
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+    }
+
+    pub fn directory() -> Self {
+        Self(CF_FS_METADATA {
+            BasicInfo: FILE_BASIC_INFO {
+                FileAttributes: FILE_ATTRIBUTE_DIRECTORY.0,
+                ..Default::default()
+            },
+            ..Default::default()
+        })
     }
 
     /// The time the file/directory was created.
@@ -216,7 +226,7 @@ impl Metadata {
     // TODO: create a method for specifying that it's a directory.
     /// File attributes.
     pub fn attributes(mut self, attributes: u32) -> Self {
-        self.0.BasicInfo.FileAttributes = attributes;
+        self.0.BasicInfo.FileAttributes |= attributes;
         self
     }
 }

@@ -264,8 +264,9 @@ pub trait FileExt: AsRawHandle {
         todo!()
     }
 
+    #[allow(clippy::missing_safety_doc)]
     /// Gets various characteristics of a placeholder using the passed blob size.
-    fn sync_root_info_unchecked(&self, blob_size: usize) -> core::Result<SyncRootInfo> {
+    unsafe fn sync_root_info_unchecked(&self, blob_size: usize) -> core::Result<SyncRootInfo> {
         let mut data = vec![0; mem::size_of::<CF_SYNC_ROOT_STANDARD_INFO>() + blob_size];
 
         unsafe {
@@ -602,14 +603,12 @@ impl<'a> ConvertOptions<'a> {
         self
     }
 
-    /// Marks the placeholder as having no child placeholders on creation.
-    ///
-    /// If [PopulationType::Full][crate::PopulationType] is specified on registration, this flag
-    /// will prevent [SyncFilter::fetch_placeholders][crate::SyncFilter::fetch_placeholders] from
-    /// being called for this placeholder.
+    // TODO: make the name of this function more specific
+    /// Marks the placeholder as "partially full," such that [SyncFilter::fetch_placeholders][crate::SyncFilter::fetch_placeholders]
+    /// will be invoked when this directory is next accessed so that the remaining placeholders are inserted.
     ///
     /// Only applicable to placeholder directories.
-    pub fn has_no_children(mut self) -> Self {
+    pub fn has_children(mut self) -> Self {
         self.flags |= CloudFilters::CF_CONVERT_FLAG_ENABLE_ON_DEMAND_POPULATION;
         self
     }
@@ -668,7 +667,6 @@ pub struct UpdateOptions<'a> {
 }
 
 impl<'a> UpdateOptions<'a> {
-    ///
     pub fn metadata(mut self, metadata: Metadata) -> Self {
         self.metadata = Some(metadata);
         self

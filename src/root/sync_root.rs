@@ -59,7 +59,7 @@ impl SyncRootIdBuilder {
     /// [SecurityId][crate::SecurityId] struct.
     ///
     /// By default, a sync root registered without a user security id will be installed globally.
-    pub fn user_security_id(&mut self, security_id: SecurityId) -> &mut Self {
+    pub fn user_security_id(mut self, security_id: SecurityId) -> Self {
         self.user_security_id = security_id;
         self
     }
@@ -68,7 +68,7 @@ impl SyncRootIdBuilder {
     ///
     /// This value does not have any actual meaning and it could theoretically be anything.
     /// However, it is encouraged to set this value to the account name of the user on the remote.
-    pub fn account_name(&mut self, account_name: U16String) -> &mut Self {
+    pub fn account_name(mut self, account_name: U16String) -> Self {
         self.account_name = account_name;
         self
     }

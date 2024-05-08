@@ -5,7 +5,8 @@ edition = "2021"
 
 [dependencies]
 wincs = { path = "../../" }
-widestring = "0.5.1"
-ssh2 = "0.9.3"
+widestring = "1.0.2"
+ssh2 = "0.9.4"
 thiserror = "1.0.30"
 rkyv = "0.7.30"
+ctrlc = "3.4.4"

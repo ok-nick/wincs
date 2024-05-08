@@ -151,7 +151,7 @@ impl Command for Update<'_> {
 #[derive(Debug, Clone, Default)]
 pub struct CreatePlaceholders<'a> {
     /// The placeholders to create.
-    pub placeholders: &'a [PlaceholderFile<'a>],
+    pub placeholders: &'a [PlaceholderFile<'a>], // FIXME: placeholder should be mutable
     /// The total amount of placeholders that are a child of the current directory.
     pub total: u64,
 }
@@ -165,6 +165,10 @@ impl Command for CreatePlaceholders<'_> {
     unsafe fn result(info: CF_OPERATION_PARAMETERS_0) -> Self::Result {
         // iterate over the placeholders and return, in a new vector, whether or
         // not they were created with their new USN
+        if info.TransferPlaceholders.PlaceholderCount == 0 {
+            return vec![];
+        }
+
         slice::from_raw_parts(
             info.TransferPlaceholders.PlaceholderArray,
             info.TransferPlaceholders.PlaceholderCount as usize,
@@ -182,10 +186,16 @@ impl Command for CreatePlaceholders<'_> {
     fn build(&self) -> CF_OPERATION_PARAMETERS_0 {
         CF_OPERATION_PARAMETERS_0 {
             TransferPlaceholders: CF_OPERATION_PARAMETERS_0_7 {
-                Flags: CloudFilters::CF_OPERATION_TRANSFER_PLACEHOLDERS_FLAG_NONE,
+                // TODO: this flag tells the system there are no more placeholders in this directory (when that can be untrue)
+                //       in the future, implement streaming
+                Flags: CloudFilters::CF_OPERATION_TRANSFER_PLACEHOLDERS_FLAG_DISABLE_ON_DEMAND_POPULATION,
                 CompletionStatus: Foundation::STATUS_SUCCESS,
                 PlaceholderTotalCount: self.total as i64,
-                PlaceholderArray: self.placeholders.as_ptr() as *mut _,
+                PlaceholderArray: match self.placeholders.is_empty() {
+                    // If the slice is empty there will be an invalid memory access error, not with null pointers, however.
+                    true => ptr::null_mut(),
+                    false => self.placeholders.as_ptr() as *mut _,
+                },
                 PlaceholderCount: self.placeholders.len() as u32,
                 EntriesProcessed: 0,
             },
