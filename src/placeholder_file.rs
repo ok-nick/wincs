@@ -1,4 +1,5 @@
-use std::{fs, marker::PhantomData, os::windows::prelude::MetadataExt, path::Path, ptr};
+use ::core::slice;
+use std::{fs, os::windows::prelude::MetadataExt, path::Path, ptr};
 
 use widestring::U16CString;
 use windows::{
@@ -19,25 +20,22 @@ use crate::usn::Usn;
 // TODO: this struct could probably have a better name to represent files/dirs
 /// A builder for creating new placeholder files/directories.
 #[repr(C)]
-#[derive(Debug)]
-pub struct PlaceholderFile<'a>(CF_PLACEHOLDER_CREATE_INFO, PhantomData<&'a ()>);
+#[derive(Debug, Clone)]
+pub struct PlaceholderFile(CF_PLACEHOLDER_CREATE_INFO);
 
-impl<'a> PlaceholderFile<'a> {
+impl<'a> PlaceholderFile {
     /// Creates a new [PlaceholderFile][crate::PlaceholderFile].
     pub fn new(relative_path: impl AsRef<Path>) -> Self {
-        Self(
-            CF_PLACEHOLDER_CREATE_INFO {
-                RelativeFileName: PCWSTR(
-                    U16CString::from_os_str(relative_path.as_ref())
-                        .unwrap()
-                        .into_raw(),
-                ),
-                Flags: CloudFilters::CF_PLACEHOLDER_CREATE_FLAG_NONE,
-                Result: Foundation::S_OK,
-                ..Default::default()
-            },
-            PhantomData,
-        )
+        Self(CF_PLACEHOLDER_CREATE_INFO {
+            RelativeFileName: PCWSTR(
+                U16CString::from_os_str(relative_path.as_ref())
+                    .unwrap()
+                    .into_raw(),
+            ),
+            Flags: CloudFilters::CF_PLACEHOLDER_CREATE_FLAG_NONE,
+            Result: Foundation::S_OK,
+            ..Default::default()
+        })
     }
 
     /// Marks this [PlaceholderFile][crate::PlaceholderFile] as having no child placeholders on
@@ -93,15 +91,22 @@ impl<'a> PlaceholderFile<'a> {
     ///
     /// The buffer must not exceed
     /// [4KiB](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Storage/CloudFilters/constant.CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH.html).
-    pub fn blob(mut self, blob: &'a [u8]) -> Self {
+    pub fn blob(mut self, blob: Vec<u8>) -> Self {
         assert!(
             blob.len() <= CloudFilters::CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH as usize,
             "blob size must not exceed {} bytes, got {} bytes",
             CloudFilters::CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH,
             blob.len()
         );
-        self.0.FileIdentity = blob.as_ptr() as *mut _;
-        self.0.FileIdentityLength = blob.len() as u32;
+
+        if blob.is_empty() {
+            return self;
+        }
+
+        let leaked_blob = Box::leak(blob.into_boxed_slice());
+
+        self.0.FileIdentity = leaked_blob.as_ptr() as *const _;
+        self.0.FileIdentityLength = leaked_blob.len() as _;
 
         self
     }
@@ -131,10 +136,20 @@ impl<'a> PlaceholderFile<'a> {
     }
 }
 
-impl Drop for PlaceholderFile<'_> {
+impl Drop for PlaceholderFile {
     fn drop(&mut self) {
         // Safety: `self.0.RelativeFileName.0` is a valid pointer to a valid UTF-16 string
-        drop(unsafe { U16CString::from_ptr_str(self.0.RelativeFileName.0) })
+        drop(unsafe { U16CString::from_ptr_str(self.0.RelativeFileName.0) });
+
+        if !self.0.FileIdentity.is_null() {
+            // Safety: `self.0.FileIdentity` is a valid pointer to a valid slice
+            drop(unsafe {
+                Box::from_raw(slice::from_raw_parts_mut(
+                    self.0.FileIdentity as *mut u8,
+                    self.0.FileIdentityLength as _,
+                ))
+            });
+        }
     }
 }
 
@@ -143,7 +158,7 @@ pub trait BatchCreate {
     fn create<P: AsRef<Path>>(&mut self, path: P) -> core::Result<Vec<core::Result<Usn>>>;
 }
 
-impl BatchCreate for [PlaceholderFile<'_>] {
+impl BatchCreate for [PlaceholderFile] {
     fn create<P: AsRef<Path>>(&mut self, path: P) -> core::Result<Vec<core::Result<Usn>>> {
         unsafe {
             CfCreatePlaceholders(
