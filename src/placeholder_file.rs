@@ -23,7 +23,7 @@ use crate::usn::Usn;
 #[derive(Debug, Clone)]
 pub struct PlaceholderFile(CF_PLACEHOLDER_CREATE_INFO);
 
-impl<'a> PlaceholderFile {
+impl PlaceholderFile {
     /// Creates a new [PlaceholderFile][crate::PlaceholderFile].
     pub fn new(relative_path: impl AsRef<Path>) -> Self {
         Self(CF_PLACEHOLDER_CREATE_INFO {

@@ -151,7 +151,7 @@ impl Command for Update<'_> {
 #[derive(Debug, Clone, Default)]
 pub struct CreatePlaceholders {
     /// The placeholders to create.
-    pub placeholders: Vec<PlaceholderFile>, // FIXME: placeholder should be mutable
+    pub placeholders: Vec<PlaceholderFile>,
     /// The total amount of placeholders that are a child of the current directory.
     pub total: u64,
 }
@@ -203,7 +203,7 @@ impl Command for CreatePlaceholders {
     }
 }
 
-impl<'a> Fallible for CreatePlaceholders {
+impl Fallible for CreatePlaceholders {
     fn fail(
         connection_key: RawConnectionKey,
         transfer_key: RawTransferKey,
