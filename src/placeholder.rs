@@ -307,6 +307,12 @@ impl<'a> UpdateOptions<'a> {
     }
 }
 
+impl<'a> Default for UpdateOptions<'a> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // Equivalent to https://docs.microsoft.com/en-us/windows/win32/api/propvarutil/nf-propvarutil-initpropvariantfromuint32
 // windows-rs doesn't provide bindings to inlined functions
 #[allow(non_snake_case)]
