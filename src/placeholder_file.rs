@@ -1,5 +1,4 @@
-use ::core::slice;
-use std::{fs, os::windows::prelude::MetadataExt, path::Path, ptr};
+use std::{fs, os::windows::prelude::MetadataExt, path::Path, ptr, slice};
 
 use widestring::U16CString;
 use windows::{
@@ -20,7 +19,7 @@ use crate::usn::Usn;
 // TODO: this struct could probably have a better name to represent files/dirs
 /// A builder for creating new placeholder files/directories.
 #[repr(C)]
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PlaceholderFile(CF_PLACEHOLDER_CREATE_INFO);
 
 impl PlaceholderFile {

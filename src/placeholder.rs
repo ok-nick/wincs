@@ -259,13 +259,17 @@ impl Seek for Placeholder {
 }
 
 /// Various properties to update a placeholder in batch.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug)]
 pub struct UpdateOptions<'a>(Update<'a>);
 
 impl<'a> UpdateOptions<'a> {
     /// Create a new [UpdateOptions][crate::UpdateOptions].
     pub fn new() -> Self {
-        Self::default()
+        Self(Update {
+            mark_sync: false,
+            metadata: None,
+            blob: None,
+        })
     }
 
     /// Marks the placeholder as synced.

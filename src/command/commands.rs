@@ -22,7 +22,7 @@ use crate::{
 };
 
 /// Read data from a placeholder file.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Read<'a> {
     /// The buffer of data to read into.
     pub buffer: &'a mut [u8],
@@ -54,7 +54,7 @@ impl Command for Read<'_> {
 }
 
 /// Write data to a placeholder file.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug)]
 pub struct Write<'a> {
     /// The buffer of data to write into the file.
     pub buffer: &'a [u8],
@@ -109,7 +109,7 @@ impl Fallible for Write<'_> {
 }
 
 /// Update various properties on a placeholder.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug)]
 pub struct Update<'a> {
     /// Whether or not to mark the placeholder as "synced."
     pub mark_sync: bool,
@@ -148,7 +148,7 @@ impl Command for Update<'_> {
 }
 
 /// Create placeholder files/directories.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug)]
 pub struct CreatePlaceholders {
     /// The placeholders to create.
     pub placeholders: Vec<PlaceholderFile>,
@@ -228,7 +228,7 @@ impl Fallible for CreatePlaceholders {
 }
 
 /// Validate the data range in the placeholder file is valid.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug)]
 pub struct Validate {
     /// The range of data to validate as "good."
     pub range: Range<u64>,
@@ -276,7 +276,7 @@ impl Fallible for Validate {
 }
 
 /// Confirm dehydration of the placeholder file and optionally update its blob.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug)]
 pub struct Dehydrate<'a> {
     /// Optional file blob to update.
     pub blob: Option<&'a [u8]>,
@@ -326,7 +326,7 @@ impl Fallible for Dehydrate<'_> {
 }
 
 /// Confirm deletion of the placeholder.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug)]
 pub struct Delete;
 
 impl Command for Delete {
@@ -367,7 +367,7 @@ impl Fallible for Delete {
 }
 
 /// Confirm rename/move of the placeholder.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug)]
 pub struct Rename;
 
 impl Command for Rename {
