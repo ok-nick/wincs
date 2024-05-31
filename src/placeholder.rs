@@ -259,7 +259,7 @@ impl Seek for Placeholder {
 }
 
 /// Various properties to update a placeholder in batch.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug)]
 pub struct UpdateOptions<'a>(Update<'a>);
 
 impl<'a> UpdateOptions<'a> {
@@ -300,6 +300,16 @@ impl<'a> UpdateOptions<'a> {
         );
         self.0.blob = Some(blob);
         self
+    }
+}
+
+impl<'a> Default for UpdateOptions<'a> {
+    fn default() -> Self {
+        Self(Update {
+            mark_sync: false,
+            metadata: None,
+            blob: None,
+        })
     }
 }
 

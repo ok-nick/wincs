@@ -80,13 +80,13 @@ impl FetchPlaceholders {
     /// Creates a list of placeholder files/directorys on the file system.
     ///
     /// The value returned is the final [Usn][crate::Usn] (and if they succeeded) after each placeholder is created.
-    pub fn pass_with_placeholder<'a>(
+    pub fn pass_with_placeholder(
         &self,
-        placeholders: &'a [PlaceholderFile<'a>],
+        placeholders: &mut [PlaceholderFile],
     ) -> core::Result<Vec<core::Result<Usn>>> {
         command::CreatePlaceholders {
-            placeholders,
             total: placeholders.len() as _,
+            placeholders,
         }
         .execute(self.connection_key, self.transfer_key)
     }

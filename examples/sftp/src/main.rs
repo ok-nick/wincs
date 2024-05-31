@@ -328,7 +328,7 @@ impl SyncFilter for Filter {
 
         let dirs = self.sftp.readdir(parent).unwrap();
         let placeholders = dirs
-            .iter()
+            .into_iter()
             .filter(|(path, _)| !Path::new(&client_path).join(path).exists())
             .map(|(path, stat)| {
                 println!("path: {:?}, stat {:?}", path, stat);
@@ -350,11 +350,11 @@ impl SyncFilter for Filter {
                     )
                     .overwrite()
                     // .mark_sync() // need this?
-                    .blob(path.as_os_str().as_encoded_bytes())
+                    .blob(path.into_os_string().into_encoded_bytes())
             })
             .collect::<Vec<_>>();
 
-        ticket.pass_with_placeholder(&placeholders).unwrap();
+        ticket.pass_with_placeholder(placeholders).unwrap();
     }
 
     fn closed(&self, request: Request, info: info::Closed) {
