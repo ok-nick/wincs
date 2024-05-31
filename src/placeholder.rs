@@ -265,11 +265,7 @@ pub struct UpdateOptions<'a>(Update<'a>);
 impl<'a> UpdateOptions<'a> {
     /// Create a new [UpdateOptions][crate::UpdateOptions].
     pub fn new() -> Self {
-        Self(Update {
-            mark_sync: false,
-            metadata: None,
-            blob: None,
-        })
+        Self::default()
     }
 
     /// Marks the placeholder as synced.
@@ -309,7 +305,11 @@ impl<'a> UpdateOptions<'a> {
 
 impl<'a> Default for UpdateOptions<'a> {
     fn default() -> Self {
-        Self::new()
+        Self(Update {
+            mark_sync: false,
+            metadata: None,
+            blob: None,
+        })
     }
 }
 

@@ -82,7 +82,7 @@ impl FetchPlaceholders {
     /// The value returned is the final [Usn][crate::Usn] (and if they succeeded) after each placeholder is created.
     pub fn pass_with_placeholder(
         &self,
-        placeholders: Vec<PlaceholderFile>,
+        placeholders: &mut [PlaceholderFile],
     ) -> core::Result<Vec<core::Result<Usn>>> {
         command::CreatePlaceholders {
             total: placeholders.len() as _,

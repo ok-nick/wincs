@@ -149,14 +149,14 @@ impl Command for Update<'_> {
 
 /// Create placeholder files/directories.
 #[derive(Debug)]
-pub struct CreatePlaceholders {
+pub struct CreatePlaceholders<'a> {
     /// The placeholders to create.
-    pub placeholders: Vec<PlaceholderFile>,
+    pub placeholders: &'a mut [PlaceholderFile],
     /// The total amount of placeholders that are a child of the current directory.
     pub total: u64,
 }
 
-impl Command for CreatePlaceholders {
+impl Command for CreatePlaceholders<'_> {
     const OPERATION: CF_OPERATION_TYPE = CloudFilters::CF_OPERATION_TYPE_TRANSFER_PLACEHOLDERS;
 
     type Result = Vec<core::Result<Usn>>;
@@ -203,7 +203,7 @@ impl Command for CreatePlaceholders {
     }
 }
 
-impl Fallible for CreatePlaceholders {
+impl Fallible for CreatePlaceholders<'_> {
     fn fail(
         connection_key: RawConnectionKey,
         transfer_key: RawTransferKey,
