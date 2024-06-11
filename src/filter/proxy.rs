@@ -232,8 +232,12 @@ pub unsafe extern "system" fn notify_rename<T: SyncFilter + 'static>(
     if let Some(filter) = filter_from_info::<T>(info) {
         let request = Request::new(*info);
         let ticket = ticket::Rename::new(request.connection_key(), request.transfer_key());
+        let info = info::Rename(
+            (*params).Anonymous.Rename,
+            request.volume_letter().to_os_string(),
+        );
 
-        filter.rename(request, ticket, info::Rename((*params).Anonymous.Rename));
+        filter.rename(request, ticket, info);
     }
 }
 

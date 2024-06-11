@@ -1,4 +1,4 @@
-use std::{fmt::Debug, ops::Range, path::PathBuf};
+use std::{ffi::OsString, fmt::Debug, ops::Range, path::PathBuf};
 
 use widestring::U16CStr;
 use windows::Win32::Storage::CloudFilters::{
@@ -266,10 +266,10 @@ pub struct Deleted(pub(crate) CF_CALLBACK_PARAMETERS_0_4);
 
 /// Information for the [SyncFilter::rename][crate::SyncFilter::rename] callback.
 #[derive(Debug)]
-pub struct Rename(pub(crate) CF_CALLBACK_PARAMETERS_0_10);
+pub struct Rename(pub(crate) CF_CALLBACK_PARAMETERS_0_10, pub(crate) OsString);
 
 impl Rename {
-    /// Whether or not the placeholder being deleted is a directory.
+    /// Whether or not the placeholder being renamed is a directory.
     pub fn is_directory(&self) -> bool {
         (self.0.Flags & CloudFilters::CF_CALLBACK_RENAME_FLAG_IS_DIRECTORY).0 != 0
     }
@@ -286,11 +286,9 @@ impl Rename {
 
     /// The full path the placeholder is being moved to.
     pub fn target_path(&self) -> PathBuf {
-        unsafe {
-            U16CStr::from_ptr_str(self.0.TargetPath.0)
-                .to_os_string()
-                .into()
-        }
+        let mut path = PathBuf::from(&self.1);
+        path.push(unsafe { U16CStr::from_ptr_str(self.0.TargetPath.0) }.to_os_string());
+        path
     }
 }
 
