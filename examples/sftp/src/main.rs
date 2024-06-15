@@ -1,7 +1,7 @@
 use std::{
     env,
     ffi::OsStr,
-    fs::{self, File},
+    fs::File,
     io::{self, BufWriter, Read, Seek, SeekFrom, Write},
     net::TcpStream,
     os::windows::fs::OpenOptionsExt,
@@ -119,10 +119,10 @@ pub struct Filter {
 }
 
 impl Filter {
-    pub fn remove_dir_all(&self, dest: &Path) -> Result<(), ssh2::Error> {
+    pub fn remove_remote_dir_all(&self, dest: &Path) -> Result<(), ssh2::Error> {
         for entry in self.sftp.readdir(dest)? {
-            match entry.0.is_dir() {
-                true => self.remove_dir_all(&entry.0)?,
+            match entry.1.is_dir() {
+                true => self.remove_remote_dir_all(&entry.0)?,
                 false => self.sftp.unlink(&entry.0)?,
             }
         }
@@ -204,7 +204,7 @@ impl SyncFilter for Filter {
         let res = || -> Result<(), _> {
             match info.is_directory() {
                 true => self
-                    .remove_dir_all(path)
+                    .remove_remote_dir_all(path)
                     .map_err(|_| CloudErrorKind::InvalidRequest)?,
                 false => self
                     .sftp
@@ -226,6 +226,14 @@ impl SyncFilter for Filter {
             let dest = info.target_path();
             let base = get_client_path();
 
+            println!(
+                "rename {} to {}, source in scope: {}, target in scope: {}",
+                src.display(),
+                dest.display(),
+                info.source_in_scope(),
+                info.target_in_scope()
+            );
+
             match (info.source_in_scope(), info.target_in_scope()) {
                 (true, true) => {
                     self.sftp
@@ -236,12 +244,7 @@ impl SyncFilter for Filter {
                         )
                         .map_err(|_| CloudErrorKind::InvalidRequest)?;
                 }
-                (true, false) => {
-                    fs::copy(&src, dest).map_err(|_| CloudErrorKind::InvalidRequest)?;
-                    self.sftp
-                        .unlink(&src.strip_prefix(&base).unwrap())
-                        .map_err(|_| CloudErrorKind::InvalidRequest)?;
-                }
+                (true, false) => {}
                 (false, true) => Err(CloudErrorKind::NotSupported)?, // TODO
                 (false, false) => Err(CloudErrorKind::InvalidRequest)?,
             }
