@@ -5,10 +5,9 @@ use windows::{
     core::{self, HSTRING, PWSTR},
     Storage::Provider::StorageProviderSyncRootManager,
     Win32::{
-        Foundation::{self, GetLastError, HANDLE},
+        Foundation::{self, GetLastError, LocalFree, HANDLE, HLOCAL},
         Security::{self, Authorization::ConvertSidToStringSidW, GetTokenInformation, TOKEN_USER},
         Storage::CloudFilters,
-        System::Memory::LocalFree,
     },
 };
 
@@ -74,15 +73,15 @@ impl SyncRootIdBuilder {
     }
 
     /// Constructs a [SyncRootId][crate::SyncRootId] from the builder.
-    pub fn build(self) -> SyncRootId {
-        SyncRootId(HSTRING::from_wide(
+    pub fn build(self) -> core::Result<SyncRootId> {
+        Ok(SyncRootId(HSTRING::from_wide(
             &[
                 self.provider_name.as_slice(),
                 self.user_security_id.0.as_slice(),
                 self.account_name.as_slice(),
             ]
             .join(&SyncRootId::SEPARATOR),
-        ))
+        )?))
     }
 }
 
@@ -113,7 +112,7 @@ impl SyncRootId {
         Ok(
             match StorageProviderSyncRootManager::GetSyncRootInformationForId(&self.0) {
                 Ok(_) => true,
-                Err(err) => err.win32_error() != Some(Foundation::ERROR_NOT_FOUND),
+                Err(err) => err.code() != Foundation::ERROR_NOT_FOUND.to_hresult(),
             },
         )
     }
@@ -178,32 +177,33 @@ impl SecurityId {
             let mut token_size = 0;
             let mut token = MaybeUninit::<TOKEN_USER>::uninit();
 
-            if !GetTokenInformation(
+            if GetTokenInformation(
                 Self::CURRENT_THREAD_EFFECTIVE_TOKEN,
                 Security::TokenUser,
-                ptr::null_mut(),
+                None,
                 0,
                 &mut token_size,
             )
-            .as_bool()
-                && GetLastError() == Foundation::ERROR_INSUFFICIENT_BUFFER
+            .is_err()
+                && GetLastError().is_err_and(|err| {
+                    err.code() == Foundation::ERROR_INSUFFICIENT_BUFFER.to_hresult()
+                })
             {
                 GetTokenInformation(
                     Self::CURRENT_THREAD_EFFECTIVE_TOKEN,
                     Security::TokenUser,
-                    &mut token as *mut _ as *mut _,
+                    Some(&mut token as *mut _ as *mut _),
                     token_size,
                     &mut token_size,
-                )
-                .ok()?;
+                )?;
             }
 
             let token = token.assume_init();
             let mut sid = PWSTR(ptr::null_mut());
-            ConvertSidToStringSidW(token.User.Sid, &mut sid as *mut _).ok()?;
+            ConvertSidToStringSidW(token.User.Sid, &mut sid as *mut _)?;
 
             let string_sid = U16CString::from_ptr_str(sid.0).into_ustring();
-            LocalFree(sid.0 as isize);
+            LocalFree(HLOCAL(sid.0 as *mut _))?;
 
             Ok(SecurityId::new_unchecked(string_sid))
         }

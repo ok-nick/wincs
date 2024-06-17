@@ -4,8 +4,9 @@ use std::{
     sync::{Arc, Weak},
 };
 
+use widestring::{u16cstr, U16CString};
 use windows::{
-    core,
+    core::{self, PCWSTR},
     Win32::{
         Storage::CloudFilters::{self, CfConnectSyncRoot, CF_CONNECT_FLAGS},
         System::{
@@ -55,11 +56,15 @@ impl Session {
         let callbacks = filter::callbacks::<T>();
         unsafe {
             CfConnectSyncRoot(
-                path.as_ref().as_os_str(),
+                PCWSTR::from_raw(
+                    U16CString::from_os_str(path.as_ref().as_os_str())
+                        .unwrap()
+                        .as_ptr(),
+                ),
                 callbacks.as_ptr(),
                 // create a weak arc so that it could be upgraded when it's being used and when the
                 // connection is closed, the filter could be freed
-                Weak::into_raw(Arc::downgrade(&filter)) as *const _,
+                Some(Weak::into_raw(Arc::downgrade(&filter)) as *const _),
                 // This is enabled by default to remove the Option requirement around various fields of the
                 // [Request][crate::Request] struct
                 self.0
@@ -85,13 +90,18 @@ fn index_path(path: &Path) -> core::Result<()> {
             Com::CLSCTX_SERVER,
         )?;
 
-        let catalog: ISearchCatalogManager = searcher.GetCatalog("SystemIndex")?;
+        let catalog: ISearchCatalogManager =
+            searcher.GetCatalog(PCWSTR::from_raw(u16cstr!("SystemIndex").as_ptr()))?;
 
         let mut url = OsString::from("file:///");
         url.push(path);
 
         let crawler = catalog.GetCrawlScopeManager()?;
-        crawler.AddDefaultScopeRule(url, true, Search::FF_INDEXCOMPLEXURLS.0 as u32)?;
+        crawler.AddDefaultScopeRule(
+            PCWSTR::from_raw(U16CString::from_os_str(url).unwrap().as_ptr()),
+            true,
+            Search::FF_INDEXCOMPLEXURLS.0 as u32,
+        )?;
         crawler.SaveAll()
     }
 }

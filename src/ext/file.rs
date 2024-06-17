@@ -3,7 +3,6 @@ use std::{
     mem::{self, MaybeUninit},
     ops::{Bound, Range, RangeBounds},
     os::windows::{io::AsRawHandle, prelude::RawHandle},
-    ptr,
 };
 
 use widestring::U16CStr;
@@ -58,13 +57,11 @@ pub trait FileExt: AsRawHandle {
         unsafe {
             CfConvertToPlaceholder(
                 HANDLE(self.as_raw_handle() as isize),
-                options
-                    .blob
-                    .map_or(ptr::null(), |blob| blob.as_ptr() as *const _),
+                options.blob.map(|blob| blob.as_ptr() as *const _),
                 options.blob.map_or(0, |blob| blob.len() as u32),
                 options.flags,
-                usn.as_mut_ptr(),
-                ptr::null_mut(),
+                Some(usn.as_mut_ptr()),
+                None,
             )
             .map(|_| usn.assume_init() as Usn)
         }
@@ -82,7 +79,7 @@ pub trait FileExt: AsRawHandle {
             CfRevertPlaceholder(
                 HANDLE(self.as_raw_handle() as isize),
                 CloudFilters::CF_REVERT_FLAG_NONE,
-                ptr::null_mut(),
+                None,
             )
         }
     }
@@ -104,19 +101,18 @@ pub trait FileExt: AsRawHandle {
     /// * The handle must have write access.
     ///     * [CloudErrorKind::AccessDenied][crate::CloudErrorKind::AccessDenied]
     // TODO: this could be split into multiple functions to make common patterns easier
-    fn update(&self, usn: Usn, mut options: UpdateOptions) -> core::Result<Usn> {
+    fn update(&self, usn: Usn, options: UpdateOptions) -> core::Result<Usn> {
         let mut usn = usn as i64;
         unsafe {
             CfUpdatePlaceholder(
                 HANDLE(self.as_raw_handle() as isize),
-                options.metadata.map_or(ptr::null(), |x| &x.0 as *const _),
-                options.blob.map_or(ptr::null(), |x| x.as_ptr() as *const _),
+                options.metadata.map(|x| &x.0 as *const _),
+                options.blob.map(|x| x.as_ptr() as *const _),
                 options.blob.map_or(0, |x| x.len() as u32),
-                options.dehydrate_range.as_mut_ptr(),
-                options.dehydrate_range.len() as u32,
+                Some(&options.dehydrate_range),
                 options.flags,
-                &mut usn as *mut _,
-                ptr::null_mut(),
+                Some(&mut usn as *mut _),
+                None,
             )
             .map(|_| usn as Usn)
         }
@@ -140,7 +136,7 @@ pub trait FileExt: AsRawHandle {
                     Bound::Unbounded => -1,
                 },
                 CloudFilters::CF_HYDRATE_FLAG_NONE,
-                ptr::null_mut(),
+                None,
             )
         }
     }
@@ -168,7 +164,7 @@ pub trait FileExt: AsRawHandle {
                 buffer.len() as i64,
                 buffer as *mut _ as *mut _,
                 buffer.len() as u32,
-                &mut length as *mut _,
+                Some(&mut length as *mut _),
             )
         }
         .map(|_| length)
@@ -190,7 +186,7 @@ pub trait FileExt: AsRawHandle {
                 CloudFilters::CF_PLACEHOLDER_INFO_STANDARD,
                 data.as_mut_ptr() as *mut _,
                 data.len() as u32,
-                ptr::null_mut(),
+                None,
             )?;
         }
 
@@ -215,8 +211,7 @@ pub trait FileExt: AsRawHandle {
                 FileSystem::FileAttributeTagInfo,
                 info.as_mut_ptr() as *mut _,
                 mem::size_of::<FILE_ATTRIBUTE_TAG_INFO>() as u32,
-            )
-            .ok()?;
+            )?;
 
             PlaceholderState::try_from_win32(CfGetPlaceholderStateFromFileInfo(
                 &info.assume_init() as *const _ as *const _,
@@ -232,7 +227,7 @@ pub trait FileExt: AsRawHandle {
                 HANDLE(self.as_raw_handle() as isize),
                 state.into(),
                 options.0,
-                ptr::null_mut(),
+                None,
             )
         }
     }
@@ -275,7 +270,7 @@ pub trait FileExt: AsRawHandle {
                 CF_SYNC_ROOT_INFO_STANDARD,
                 data.as_mut_ptr() as *mut _,
                 data.len() as u32,
-                ptr::null_mut(),
+                None,
             )?;
         }
 
@@ -309,7 +304,7 @@ fn mark_sync_state(handle: RawHandle, sync: bool, usn: Usn) -> core::Result<Usn>
                 CloudFilters::CF_IN_SYNC_STATE_NOT_IN_SYNC
             },
             CloudFilters::CF_SET_IN_SYNC_FLAG_NONE,
-            &mut usn as *mut _,
+            Some(&mut usn as *mut _),
         )
         .map(|_| usn as u64)
     }
@@ -341,7 +336,7 @@ fn dehydrate<T: RangeBounds<u64>>(
             } else {
                 CloudFilters::CF_DEHYDRATE_FLAG_BACKGROUND
             },
-            ptr::null_mut(),
+            None,
         )
     }
 }

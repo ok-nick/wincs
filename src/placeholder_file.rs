@@ -1,4 +1,4 @@
-use std::{fs, os::windows::prelude::MetadataExt, path::Path, ptr, slice};
+use std::{fs, os::windows::prelude::MetadataExt, path::Path, slice};
 
 use widestring::U16CString;
 use windows::{
@@ -18,7 +18,7 @@ use crate::usn::Usn;
 
 // TODO: this struct could probably have a better name to represent files/dirs
 /// A builder for creating new placeholder files/directories.
-#[repr(C)]
+#[repr(transparent)]
 #[derive(Debug)]
 pub struct PlaceholderFile(CF_PLACEHOLDER_CREATE_INFO);
 
@@ -120,14 +120,13 @@ impl PlaceholderFile {
     ///
     /// If you need to create placeholders from the [SyncFilter::fetch_placeholders][crate::SyncFilter::fetch_placeholders] callback, do not use this method. Instead, use
     /// [FetchPlaceholders::pass_with_placeholders][crate::ticket::FetchPlaceholders::pass_with_placeholders].
-    pub fn create<P: AsRef<Path>>(mut self, parent: impl AsRef<Path>) -> core::Result<Usn> {
+    pub fn create<P: AsRef<Path>>(self, parent: impl AsRef<Path>) -> core::Result<Usn> {
         unsafe {
             CfCreatePlaceholders(
-                parent.as_ref().as_os_str(),
-                &mut self as *mut _ as *mut _,
-                1,
+                PCWSTR::from_raw(U16CString::from_os_str(parent.as_ref()).unwrap().as_ptr()),
+                &mut [self.0],
                 CloudFilters::CF_CREATE_FLAG_NONE,
-                ptr::null_mut(),
+                None,
             )?;
         }
 
@@ -161,11 +160,14 @@ impl BatchCreate for [PlaceholderFile] {
     fn create<P: AsRef<Path>>(&mut self, path: P) -> core::Result<Vec<core::Result<Usn>>> {
         unsafe {
             CfCreatePlaceholders(
-                path.as_ref().as_os_str(),
-                self.as_mut_ptr() as *mut CF_PLACEHOLDER_CREATE_INFO,
-                self.len() as u32,
+                PCWSTR::from_raw(U16CString::from_os_str(path.as_ref()).unwrap().as_ptr()),
+                // TODO: we should be able to cast it directly to its inner type
+                &mut self
+                    .iter()
+                    .map(|placeholder| placeholder.0)
+                    .collect::<Vec<_>>(),
                 CloudFilters::CF_CREATE_FLAG_NONE,
-                ptr::null_mut(),
+                None,
             )?;
         }
 

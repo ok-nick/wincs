@@ -7,12 +7,12 @@ pub mod command;
 mod error;
 /// Contains traits extending common structs from the [std][std].
 pub mod ext;
-pub mod filter;
-pub mod placeholder;
-pub mod placeholder_file;
-pub mod request;
-pub mod root;
-pub mod usn;
+mod filter;
+mod placeholder;
+mod placeholder_file;
+mod request;
+mod root;
+mod usn;
 mod utility;
 
 pub use error::CloudErrorKind;

@@ -25,8 +25,8 @@ where
     /// Information about the sync root that the path is located in.
     fn sync_root_info(&self) -> core::Result<StorageProviderSyncRootInfo> {
         StorageProviderSyncRootManager::GetSyncRootInformationForFolder(
-            StorageFolder::GetFolderFromPathAsync(
-                &U16String::from_os_str(self.as_ref().as_os_str()).to_hstring(),
+            &StorageFolder::GetFolderFromPathAsync(
+                &U16String::from_os_str(self.as_ref().as_os_str()).to_hstring()?,
             )?
             .get()?,
         )
