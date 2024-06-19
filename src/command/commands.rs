@@ -116,7 +116,7 @@ pub struct Update<'a> {
     /// Optional metadata to update.
     pub metadata: Option<Metadata>,
     /// Optional file blob to update.
-    pub blob: Option<&'a [u8]>,
+    pub blob: &'a [u8],
 }
 
 impl Command for Update<'_> {
@@ -135,13 +135,15 @@ impl Command for Update<'_> {
                 } else {
                     CloudFilters::CF_OPERATION_RESTART_HYDRATION_FLAG_NONE
                 },
-                FsMetadata: self.metadata.map_or(ptr::null_mut(), |mut metadata| {
-                    &mut metadata as *mut _ as *mut _
-                }),
-                FileIdentity: self
-                    .blob
-                    .map_or(ptr::null_mut(), |blob| blob.as_ptr() as *mut _),
-                FileIdentityLength: self.blob.map_or(0, |blob| blob.len() as u32),
+                FsMetadata: self
+                    .metadata
+                    .as_ref()
+                    .map_or(ptr::null(), |metadata| &metadata.0 as *const _),
+                FileIdentity: match self.blob.is_empty() {
+                    true => ptr::null(),
+                    false => self.blob.as_ptr() as *const _,
+                },
+                FileIdentityLength: self.blob.len() as _,
             },
         }
     }
@@ -279,7 +281,7 @@ impl Fallible for Validate {
 #[derive(Debug)]
 pub struct Dehydrate<'a> {
     /// Optional file blob to update.
-    pub blob: Option<&'a [u8]>,
+    pub blob: &'a [u8],
 }
 
 impl Command for Dehydrate<'_> {
@@ -295,10 +297,11 @@ impl Command for Dehydrate<'_> {
             AckDehydrate: CF_OPERATION_PARAMETERS_0_1 {
                 Flags: CloudFilters::CF_OPERATION_ACK_DEHYDRATE_FLAG_NONE,
                 CompletionStatus: Foundation::STATUS_SUCCESS,
-                FileIdentity: self
-                    .blob
-                    .map_or(ptr::null(), |blob| blob.as_ptr() as *const _),
-                FileIdentityLength: self.blob.map_or(0, |blob| blob.len() as u32),
+                FileIdentity: match self.blob.is_empty() {
+                    true => ptr::null(),
+                    false => self.blob.as_ptr() as *const _,
+                },
+                FileIdentityLength: self.blob.len() as u32,
             },
         }
     }

@@ -1,12 +1,15 @@
 use std::ops::Range;
 
-use windows::core;
+use windows::{
+    core,
+    Win32::Storage::CloudFilters::{CfReportProviderProgress, CF_CONNECTION_KEY},
+};
 
 use crate::{
     command::{self, Command, Fallible},
     error::CloudErrorKind,
     request::{RawConnectionKey, RawTransferKey},
-    PlaceholderFile, Usn,
+    sealed, utility, PlaceholderFile, Usn,
 };
 
 /// A ticket for the [SyncFilter::fetch_data][crate::SyncFilter::fetch_data] callback.
@@ -18,7 +21,7 @@ pub struct FetchData {
 
 impl FetchData {
     /// Create a new [FetchData][crate::ticket::FetchData].
-    pub fn new(connection_key: RawConnectionKey, transfer_key: RawTransferKey) -> Self {
+    pub(crate) fn new(connection_key: RawConnectionKey, transfer_key: RawTransferKey) -> Self {
         Self {
             connection_key,
             transfer_key,
@@ -29,7 +32,51 @@ impl FetchData {
     pub fn fail(&self, error_kind: CloudErrorKind) -> core::Result<()> {
         command::Write::fail(self.connection_key, self.transfer_key, error_kind)
     }
+
+    pub fn report_progress(&self, total: u64, completed: u64) -> core::Result<()> {
+        unsafe {
+            CfReportProviderProgress(
+                CF_CONNECTION_KEY(self.connection_key),
+                self.transfer_key,
+                total as i64,
+                completed as i64,
+            )
+        }?;
+
+        Ok(())
+    }
 }
+
+impl utility::ReadAt for FetchData {
+    /// Read data at an offset from a placeholder file.
+    ///
+    /// This method is equivalent to calling `CfExecute` with `CF_OPERATION_TYPE_RETRIEVE_DATA`.
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> core::Result<u64> {
+        command::Read {
+            buffer: buf,
+            position: offset,
+        }
+        .execute(self.connection_key, self.transfer_key)
+    }
+}
+
+impl utility::WriteAt for FetchData {
+    /// Write data at an offset to a placeholder file.
+    ///
+    /// The buffer passed must be 4KiB in length or end on the logical file size. Unfortunately,
+    /// this is a restriction of the operating system.
+    ///
+    /// This method is equivalent to calling `CfExecute` with `CF_OPERATION_TYPE_TRANSFER_DATA`.
+    fn write_at(&self, buf: &[u8], offset: u64) -> core::Result<()> {
+        command::Write {
+            buffer: buf,
+            position: offset,
+        }
+        .execute(self.connection_key, self.transfer_key)
+    }
+}
+
+impl sealed::Sealed for FetchData {}
 
 /// A ticket for the [SyncFilter::validate_data][crate::SyncFilter::validate_data] callback.
 #[derive(Debug)]
@@ -40,7 +87,7 @@ pub struct ValidateData {
 
 impl ValidateData {
     /// Create a new [ValidateData][crate::ticket::ValidateData].
-    pub fn new(connection_key: RawConnectionKey, transfer_key: RawTransferKey) -> Self {
+    pub(crate) fn new(connection_key: RawConnectionKey, transfer_key: RawTransferKey) -> Self {
         Self {
             connection_key,
             transfer_key,
@@ -61,6 +108,24 @@ impl ValidateData {
     }
 }
 
+impl utility::ReadAt for ValidateData {
+    /// Read data at an offset from a placeholder file.
+    ///
+    /// This method is equivalent to calling `CfExecute` with `CF_OPERATION_TYPE_RETRIEVE_DATA`.
+    ///
+    /// The bytes returned will ALWAYS be the length of the buffer passed in. The operating
+    /// system provides these guarantees.
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> core::Result<u64> {
+        command::Read {
+            buffer: buf,
+            position: offset,
+        }
+        .execute(self.connection_key, self.transfer_key)
+    }
+}
+
+impl sealed::Sealed for ValidateData {}
+
 /// A ticket for the [SyncFilter::fetch_placeholders][crate::SyncFilter::fetch_placeholders] callback.
 #[derive(Debug)]
 pub struct FetchPlaceholders {
@@ -70,7 +135,7 @@ pub struct FetchPlaceholders {
 
 impl FetchPlaceholders {
     /// Create a new [FetchPlaceholders][crate::ticket::FetchPlaceholders].
-    pub fn new(connection_key: RawConnectionKey, transfer_key: RawTransferKey) -> Self {
+    pub(crate) fn new(connection_key: RawConnectionKey, transfer_key: RawTransferKey) -> Self {
         Self {
             connection_key,
             transfer_key,
@@ -107,7 +172,7 @@ pub struct Dehydrate {
 
 impl Dehydrate {
     /// Create a new [Dehydrate][crate::ticket::Dehydrate].
-    pub fn new(connection_key: RawConnectionKey, transfer_key: RawTransferKey) -> Self {
+    pub(crate) fn new(connection_key: RawConnectionKey, transfer_key: RawTransferKey) -> Self {
         Self {
             connection_key,
             transfer_key,
@@ -116,12 +181,12 @@ impl Dehydrate {
 
     /// Confirms dehydration of the file.
     pub fn pass(&self) -> core::Result<()> {
-        command::Dehydrate { blob: None }.execute(self.connection_key, self.transfer_key)
+        command::Dehydrate { blob: &[] }.execute(self.connection_key, self.transfer_key)
     }
 
     /// Confirms dehydration of the file and updates its file blob.
     pub fn pass_with_blob(&self, blob: &[u8]) -> core::Result<()> {
-        command::Dehydrate { blob: Some(blob) }.execute(self.connection_key, self.transfer_key)
+        command::Dehydrate { blob }.execute(self.connection_key, self.transfer_key)
     }
 
     /// Fail the callback with the specified error.
@@ -139,7 +204,7 @@ pub struct Delete {
 
 impl Delete {
     /// Create a new [Delete][crate::ticket::Delete].
-    pub fn new(connection_key: RawConnectionKey, transfer_key: RawTransferKey) -> Self {
+    pub(crate) fn new(connection_key: RawConnectionKey, transfer_key: RawTransferKey) -> Self {
         Self {
             connection_key,
             transfer_key,
@@ -166,7 +231,7 @@ pub struct Rename {
 
 impl Rename {
     /// Create a new [Rename][crate::ticket::Rename].
-    pub fn new(connection_key: RawConnectionKey, transfer_key: RawTransferKey) -> Self {
+    pub(crate) fn new(connection_key: RawConnectionKey, transfer_key: RawTransferKey) -> Self {
         Self {
             connection_key,
             transfer_key,

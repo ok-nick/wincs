@@ -298,7 +298,7 @@ impl<'a> UpdateOptions<'a> {
             CloudFilters::CF_PLACEHOLDER_MAX_FILE_IDENTITY_LENGTH,
             blob.len()
         );
-        self.0.blob = Some(blob);
+        self.0.blob = blob;
         self
     }
 }
@@ -308,7 +308,7 @@ impl<'a> Default for UpdateOptions<'a> {
         Self(Update {
             mark_sync: false,
             metadata: None,
-            blob: None,
+            blob: &[],
         })
     }
 }

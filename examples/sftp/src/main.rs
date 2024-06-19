@@ -2,7 +2,7 @@ use std::{
     env,
     ffi::OsStr,
     fs::File,
-    io::{self, BufWriter, Read, Seek, SeekFrom, Write},
+    io::{self, Read, Seek, SeekFrom},
     net::TcpStream,
     os::windows::fs::OpenOptionsExt,
     path::Path,
@@ -19,11 +19,12 @@ use wincs::{
     placeholder_file::{Metadata, PlaceholderFile},
     request::Request,
     CloudErrorKind, HydrationType, PopulationType, Registration, SecurityId, SyncRootIdBuilder,
+    WriteAt,
 };
 
 // max should be 65536, this is done both in term-scp and sshfs because it's the
 // max packet size for a tcp connection
-const DOWNLOAD_CHUNK_SIZE_BYTES: usize = 4096;
+const DOWNLOAD_CHUNK_SIZE_BYTES: usize = 65536;
 // doesn't have to be 4KiB aligned
 // const UPLOAD_CHUNK_SIZE_BYTES: usize = 4096;
 
@@ -151,40 +152,35 @@ impl SyncFilter for Filter {
                 .sftp
                 .open(path)
                 .map_err(|_| CloudErrorKind::InvalidRequest)?;
-            let mut client_file = BufWriter::with_capacity(4096, request.placeholder());
             server_file
-                .seek(SeekFrom::Start(position))
-                .map_err(|_| CloudErrorKind::InvalidRequest)?;
-            client_file
                 .seek(SeekFrom::Start(position))
                 .map_err(|_| CloudErrorKind::InvalidRequest)?;
 
             let mut buffer = [0; DOWNLOAD_CHUNK_SIZE_BYTES];
 
-            // TODO: move to a func and remove unwraps & allow to split up the entire read
-            // into segments done on separate threads
-            // transfer the data in chunks
             loop {
-                // TODO: read directly to the BufWriters buffer
-                // TODO: ignore if the error was just interrupted
-                let bytes_read = server_file
+                let mut bytes_read = server_file
                     .read(&mut buffer)
                     .map_err(|_| CloudErrorKind::InvalidRequest)?;
-                let bytes_written = client_file
-                    .write(&buffer[0..bytes_read])
+
+                if bytes_read % 4096 != 0 && position + (bytes_read as u64) < end {
+                    let unaligned = bytes_read % 4096;
+                    bytes_read = bytes_read - unaligned;
+                    server_file
+                        .seek(SeekFrom::Current(-(unaligned as i64)))
+                        .unwrap();
+                }
+                ticket
+                    .write_at(&buffer[0..bytes_read], position)
                     .map_err(|_| CloudErrorKind::InvalidRequest)?;
-                position += bytes_written as u64;
+                position += bytes_read as u64;
 
                 if position >= end {
                     break;
                 }
 
-                client_file.get_ref().set_progress(end, position).unwrap();
+                ticket.report_progress(end, position).unwrap();
             }
-
-            client_file
-                .flush()
-                .map_err(|_| CloudErrorKind::InvalidRequest)?;
 
             Ok(())
         }();

@@ -13,7 +13,7 @@ pub mod placeholder_file;
 pub mod request;
 pub mod root;
 pub mod usn;
-mod utility;
+pub mod utility;
 
 pub use error::CloudErrorKind;
 pub use filter::{info, ticket, SyncFilter};
@@ -26,3 +26,8 @@ pub use root::{
     SyncRootIdBuilder,
 };
 pub use usn::Usn;
+pub use utility::{ReadAt, WriteAt};
+
+mod sealed {
+    pub trait Sealed {}
+}
