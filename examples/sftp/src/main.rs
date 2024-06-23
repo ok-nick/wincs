@@ -14,8 +14,10 @@ use thiserror::Error;
 use widestring::{u16str, U16String};
 use wincs::{
     filter::{info, ticket, SyncFilter},
+    metadata::Metadata,
+    nt_time::FileTime,
     placeholder::ConvertOptions,
-    placeholder_file::{Metadata, PlaceholderFile},
+    placeholder_file::PlaceholderFile,
     request::Request,
     CloudErrorKind, HydrationType, Placeholder, PopulationType, Registration, SecurityId,
     SyncRootIdBuilder, WriteAt,
@@ -168,9 +170,9 @@ impl SyncFilter for Filter {
                     .read(&mut buffer)
                     .map_err(|_| CloudErrorKind::InvalidRequest)?;
 
-                if bytes_read % 4096 != 0 && position + (bytes_read as u64) < end {
-                    let unaligned = bytes_read % 4096;
-                    bytes_read = bytes_read - unaligned;
+                let unaligned = bytes_read % 4096;
+                if unaligned != 0 && position + (bytes_read as u64) < end {
+                    bytes_read -= unaligned;
                     server_file
                         .seek(SeekFrom::Current(-(unaligned as i64)))
                         .unwrap();
@@ -239,8 +241,8 @@ impl SyncFilter for Filter {
                 (true, true) => {
                     self.sftp
                         .rename(
-                            &src.strip_prefix(&base).unwrap(),
-                            &dest.strip_prefix(&base).unwrap(),
+                            src.strip_prefix(&base).unwrap(),
+                            dest.strip_prefix(&base).unwrap(),
                             None,
                         )
                         .map_err(|_| CloudErrorKind::InvalidRequest)?;
@@ -285,16 +287,16 @@ impl SyncFilter for Filter {
                 let relative_path = path.strip_prefix(parent).unwrap();
                 PlaceholderFile::new(relative_path)
                     .metadata(
-                        if stat.is_dir() {
-                            Metadata::directory()
-                        } else {
-                            Metadata::file()
+                        match stat.is_dir() {
+                            true => Metadata::directory(),
+                            false => Metadata::file(),
                         }
                         .size(stat.size.unwrap_or_default())
-                        // .creation_time() // either the access time or write time, whichever is less
-                        .last_access_time(stat.atime.unwrap_or_default())
-                        .last_write_time(stat.mtime.unwrap_or_default())
-                        .change_time(stat.mtime.unwrap_or_default()),
+                        .accessed(
+                            stat.atime
+                                .and_then(|t| FileTime::from_unix_time(t as _).ok())
+                                .unwrap_or_default(),
+                        ),
                     )
                     .mark_in_sync()
                     .overwrite()

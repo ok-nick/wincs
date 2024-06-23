@@ -16,7 +16,8 @@ use windows::{
 use crate::{
     command::executor::{execute, Command, Fallible},
     error::CloudErrorKind,
-    placeholder_file::{Metadata, PlaceholderFile},
+    metadata::Metadata,
+    placeholder_file::PlaceholderFile,
     request::{RawConnectionKey, RawTransferKey},
     usn::Usn,
 };
@@ -112,7 +113,7 @@ impl Fallible for Write<'_> {
 #[derive(Debug)]
 pub struct Update<'a> {
     /// Whether or not to mark the placeholder as "synced."
-    pub mark_sync: bool,
+    pub mark_in_sync: bool,
     /// Optional metadata to update.
     pub metadata: Option<Metadata>,
     /// Optional file blob to update.
@@ -130,7 +131,7 @@ impl Command for Update<'_> {
     fn build(&self) -> CF_OPERATION_PARAMETERS_0 {
         CF_OPERATION_PARAMETERS_0 {
             RestartHydration: CF_OPERATION_PARAMETERS_0_4 {
-                Flags: if self.mark_sync {
+                Flags: if self.mark_in_sync {
                     CloudFilters::CF_OPERATION_RESTART_HYDRATION_FLAG_MARK_IN_SYNC
                 } else {
                     CloudFilters::CF_OPERATION_RESTART_HYDRATION_FLAG_NONE

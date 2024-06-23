@@ -21,7 +21,7 @@ use windows::{
     },
 };
 
-use crate::{Metadata, Usn};
+use crate::{metadata::Metadata, Usn};
 
 /// The type of handle that the placeholder file/directory owns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -422,13 +422,13 @@ impl<'a> UpdateOptions<'a> {
     }
 
     /// Disables on-demand population for directories.
-    pub fn no_more_children(mut self) -> Self {
+    pub fn has_no_children(mut self) -> Self {
         self.flags |= CloudFilters::CF_UPDATE_FLAG_DISABLE_ON_DEMAND_POPULATION;
         self
     }
 
     /// Enable on-demand population for directories.
-    pub fn has_more_children(mut self) -> Self {
+    pub fn has_children(mut self) -> Self {
         self.flags |= CloudFilters::CF_UPDATE_FLAG_ENABLE_ON_DEMAND_POPULATION;
         self
     }
@@ -632,6 +632,7 @@ impl From<File> for Placeholder {
 impl TryFrom<Placeholder> for File {
     type Error = core::Error;
 
+    #[allow(clippy::missing_transmute_annotations)]
     fn try_from(placeholder: Placeholder) -> core::Result<Self> {
         match placeholder.handle.handle_type {
             PlaceholderHandleType::Win32 => {

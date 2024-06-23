@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 widestring = "1.0.2"
+nt-time = "0.8.0"
 memoffset = "0.6.4"
 windows = { version = "0.33.0", features = [
   "alloc",

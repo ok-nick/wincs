@@ -8,6 +8,7 @@ mod error;
 /// Contains traits extending common structs from the [std][std].
 pub mod ext;
 pub mod filter;
+pub mod metadata;
 pub mod placeholder;
 pub mod placeholder_file;
 pub mod request;
@@ -18,7 +19,7 @@ pub mod utility;
 pub use error::CloudErrorKind;
 pub use filter::{info, ticket, SyncFilter};
 pub use placeholder::Placeholder;
-pub use placeholder_file::{BatchCreate, Metadata, PlaceholderFile};
+pub use placeholder_file::{BatchCreate, PlaceholderFile};
 pub use request::{Process, Request};
 pub use root::{
     active_roots, is_supported, Connection, HydrationPolicy, HydrationType, PopulationType,
@@ -27,6 +28,8 @@ pub use root::{
 };
 pub use usn::Usn;
 pub use utility::{ReadAt, WriteAt};
+
+pub use nt_time;
 
 mod sealed {
     pub trait Sealed {}
