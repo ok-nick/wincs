@@ -4,7 +4,6 @@ use std::{
     fs::File,
     io::{self, Read, Seek, SeekFrom},
     net::TcpStream,
-    os::windows::fs::OpenOptionsExt,
     path::Path,
     sync::mpsc,
 };
@@ -14,18 +13,17 @@ use ssh2::{Session, Sftp};
 use thiserror::Error;
 use widestring::{u16str, U16String};
 use wincs::{
-    ext::{ConvertOptions, FileExt},
     filter::{info, ticket, SyncFilter},
+    placeholder::ConvertOptions,
     placeholder_file::{Metadata, PlaceholderFile},
     request::Request,
-    CloudErrorKind, HydrationType, PopulationType, Registration, SecurityId, SyncRootIdBuilder,
-    WriteAt,
+    CloudErrorKind, HydrationType, Placeholder, PopulationType, Registration, SecurityId,
+    SyncRootIdBuilder, WriteAt,
 };
 
 // max should be 65536, this is done both in term-scp and sshfs because it's the
 // max packet size for a tcp connection
 const DOWNLOAD_CHUNK_SIZE_BYTES: usize = 65536;
-// doesn't have to be 4KiB aligned
 // const UPLOAD_CHUNK_SIZE_BYTES: usize = 4096;
 
 const PROVIDER_NAME: &str = "wincs";
@@ -72,7 +70,7 @@ fn main() {
             .unwrap();
     }
 
-    convert_to_placeholder(Path::new(&client_path));
+    mark_in_sync(Path::new(&client_path), &sftp);
 
     let connection = wincs::Session::new()
         .connect(&client_path, Filter { sftp })
@@ -88,29 +86,36 @@ fn get_client_path() -> String {
     env::var("CLIENT_PATH").unwrap()
 }
 
-fn convert_to_placeholder(path: &Path) {
+fn mark_in_sync(path: &Path, sftp: &Sftp) {
+    let base = get_client_path();
     for entry in path.read_dir().unwrap() {
         let entry = entry.unwrap();
-        let is_dir = entry.path().is_dir();
+        let remote_path = entry.path().strip_prefix(&base).unwrap().to_owned();
 
-        let mut open_options = File::options();
-        open_options.read(true);
-        if is_dir {
-            // FILE_FLAG_BACKUP_SEMANTICS, needed to obtain handle to directory
-            open_options.custom_flags(0x02000000);
+        let Ok(meta) = sftp.stat(&remote_path) else {
+            continue;
+        };
+        if meta.is_dir() != entry.file_type().unwrap().is_dir() {
+            continue;
         }
 
-        let convert_options = if is_dir {
-            ConvertOptions::default().has_children()
-        } else {
-            ConvertOptions::default()
+        let mut options = ConvertOptions::default()
+            .mark_in_sync()
+            .blob(remote_path.clone().into_os_string().into_encoded_bytes());
+        let mut placeholder = match meta.is_dir() {
+            true => {
+                options = options.has_children();
+                Placeholder::open(entry.path()).unwrap()
+            }
+            false => File::open(entry.path()).unwrap().into(),
         };
 
-        let file = open_options.open(entry.path()).unwrap();
-        file.to_placeholder(convert_options).unwrap();
+        _ = placeholder
+            .convert_to_placeholder(options, None)
+            .inspect_err(|e| println!("convert_to_placeholder {:?}", e));
 
-        if is_dir {
-            convert_to_placeholder(&entry.path());
+        if meta.is_dir() {
+            mark_in_sync(&entry.path(), sftp);
         }
     }
 }
@@ -291,7 +296,7 @@ impl SyncFilter for Filter {
                         .last_write_time(stat.mtime.unwrap_or_default())
                         .change_time(stat.mtime.unwrap_or_default()),
                     )
-                    .mark_sync()
+                    .mark_in_sync()
                     .overwrite()
                     .blob(path.into_os_string().into_encoded_bytes())
             })

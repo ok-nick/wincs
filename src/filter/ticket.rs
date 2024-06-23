@@ -33,6 +33,10 @@ impl FetchData {
         command::Write::fail(self.connection_key, self.transfer_key, error_kind)
     }
 
+    /// Displays a progress bar next to the file in the file explorer to show the progress of the
+    /// current operation. In addition, the standard Windows file progress dialog will open
+    /// displaying the speed and progress based on the values set. During background hydrations,
+    /// an interactive toast will appear notifying the user of an operation with a progress bar.
     pub fn report_progress(&self, total: u64, completed: u64) -> core::Result<()> {
         unsafe {
             CfReportProviderProgress(
@@ -45,6 +49,8 @@ impl FetchData {
 
         Ok(())
     }
+
+    // TODO: response Command::Update
 }
 
 impl utility::ReadAt for FetchData {
@@ -94,10 +100,15 @@ impl ValidateData {
         }
     }
 
+    /// Validates the data range in the placeholder file is valid.
+    ///
+    /// This method should be used in the
+    /// [SyncFilter::validate_data][crate::SyncFilter::validate_data] callback.
+    ///
+    /// This method is equivalent to calling `CfExecute` with `CF_OPERATION_TYPE_ACK_DATA`.
     // TODO: make this generic over a RangeBounds
     // if the range specified is past the current file length, will it consider that range to be validated?
     // https://docs.microsoft.com/en-us/answers/questions/750302/if-the-ackdata-field-of-cf-operation-parameters-is.html
-    /// Confirms the specified range in the file is valid.
     pub fn pass(&self, range: Range<u64>) -> core::Result<()> {
         command::Validate { range }.execute(self.connection_key, self.transfer_key)
     }
@@ -106,6 +117,8 @@ impl ValidateData {
     pub fn fail(&self, error_kind: CloudErrorKind) -> core::Result<()> {
         command::Validate::fail(self.connection_key, self.transfer_key, error_kind)
     }
+
+    // TODO: response Command::Update
 }
 
 impl utility::ReadAt for ValidateData {

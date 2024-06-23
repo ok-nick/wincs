@@ -1,9 +1,7 @@
 use std::{path::PathBuf, slice};
 
-use widestring::{U16CStr, U16CString};
+use widestring::{u16cstr, U16CStr, U16CString};
 use windows::Win32::Storage::CloudFilters::{CF_CALLBACK_INFO, CF_PROCESS_INFO};
-
-use crate::placeholder::Placeholder;
 
 pub type RawConnectionKey = isize;
 pub type RawTransferKey = i64;
@@ -75,7 +73,6 @@ impl Request {
         self.0.FileSize as u64
     }
 
-    // TODO: Create a U16Path struct to avoid an extra allocation
     // For now this should be cached on creation
     /// The absolute path of the placeholder file/directory starting from the root directory of the
     /// volume.
@@ -105,7 +102,6 @@ impl Request {
     //     self.0.RequestKey
     // }
 
-    // TODO: move file blob and file-related stuff to the placeholder struct?
     /// The byte slice assigned to the current placeholder file/directory.
     pub fn file_blob(&self) -> &[u8] {
         unsafe {
@@ -126,26 +122,15 @@ impl Request {
         }
     }
 
-    /// Creates a new [Placeholder][crate::Placeholder] struct to perform various operations on the
-    /// current placeholder file/directory.
-    pub fn placeholder(&self) -> Placeholder {
-        Placeholder::new(
-            self.connection_key(),
-            self.transfer_key(),
-            self.path(),
-            self.file_size(),
-        )
-    }
-
-    // https://docs.microsoft.com/en-us/windows/win32/api/cfapi/ne-cfapi-cf_callback_type#remarks
-    // after 60 seconds of no report, windows will cancel the request with an error,
-    // this function is a "hack" to avoid the timeout
-    // https://docs.microsoft.com/en-us/windows/win32/api/cfapi/nf-cfapi-cfexecute#remarks
-    // CfExecute will reset any timers as stated
-    /// By default, the operating system will invalidate the callback after 60 seconds of no
-    /// activity (meaning, no placeholder methods are invoked). If you are prone to this issue,
-    /// consider calling this method or call placeholder methods more frequently.
-    pub fn reset_timeout() {}
+    // // https://docs.microsoft.com/en-us/windows/win32/api/cfapi/ne-cfapi-cf_callback_type#remarks
+    // // after 60 seconds of no report, windows will cancel the request with an error,
+    // // this function is a "hack" to avoid the timeout
+    // // https://docs.microsoft.com/en-us/windows/win32/api/cfapi/nf-cfapi-cfexecute#remarks
+    // // CfExecute will reset any timers as stated
+    // /// By default, the operating system will invalidate the callback after 60 seconds of no
+    // /// activity (meaning, no placeholder methods are invoked). If you are prone to this issue,
+    // /// consider calling this method or call placeholder methods more frequently.
+    // pub fn reset_timeout() {}
 }
 
 /// Information about the calling process.
@@ -187,7 +172,7 @@ impl Process {
     /// retrieve the path.
     pub fn path(&self) -> Option<PathBuf> {
         let path = unsafe { U16CString::from_ptr_str(self.0.ImagePath.0) };
-        if path == unsafe { U16CString::from_str_unchecked("UNKNOWN") } {
+        if path == u16cstr!("UNKNOWN") {
             None
         } else {
             Some(path.to_os_string().into())

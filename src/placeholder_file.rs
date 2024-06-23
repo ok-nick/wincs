@@ -50,7 +50,7 @@ impl PlaceholderFile {
         self
     }
 
-    /// Marks the [PlaceholderFile][crate::PlaceholderFile] as synced.
+    /// Marks the [PlaceholderFile][crate::PlaceholderFile] as in sync.
     ///
     /// This flag is used to determine the status of a placeholder shown in the file explorer. It
     /// is applicable to both files and directories.
@@ -59,7 +59,7 @@ impl PlaceholderFile {
     /// A file that is partially full could still be marked as synced, any remaining data will
     /// invoke the [SyncFilter::fetch_data][crate::SyncFilter::fetch_data] callback automatically
     /// if requested.
-    pub fn mark_sync(mut self) -> Self {
+    pub fn mark_in_sync(mut self) -> Self {
         self.0.Flags |= CloudFilters::CF_PLACEHOLDER_CREATE_FLAG_MARK_IN_SYNC;
         self
     }
@@ -108,6 +108,10 @@ impl PlaceholderFile {
         self.0.FileIdentityLength = leaked_blob.len() as _;
 
         self
+    }
+
+    pub fn get_usn(&self) -> Option<Usn> {
+        self.0.CreateUsn.try_into().ok()
     }
 
     /// Creates a placeholder file/directory on the file system.
@@ -183,7 +187,7 @@ impl BatchCreate for [PlaceholderFile] {
 }
 
 /// The metadata for a [PlaceholderFile][crate::PlaceholderFile].
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Metadata(pub(crate) CF_FS_METADATA);
 
 impl Metadata {
