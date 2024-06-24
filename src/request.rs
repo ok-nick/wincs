@@ -1,6 +1,6 @@
-use std::{path::PathBuf, slice};
+use std::{ffi::OsString, path::PathBuf, slice};
 
-use widestring::{u16cstr, U16CStr, U16CString};
+use widestring::{u16cstr, U16CStr};
 use windows::Win32::Storage::CloudFilters::{CF_CALLBACK_INFO, CF_PROCESS_INFO};
 
 pub type RawConnectionKey = isize;
@@ -21,28 +21,18 @@ impl Request {
         Self(info)
     }
 
-    /// A raw connection key used to identify the connection.
-    pub fn connection_key(&self) -> RawConnectionKey {
-        self.0.ConnectionKey.0
-    }
-
-    /// A raw transfer key used to identify the current file operation.
-    pub fn transfer_key(&self) -> RawTransferKey {
-        self.0.TransferKey
-    }
-
     /// The GUID path of the current volume.
     ///
     /// The returned value comes in the form `\?\Volume{GUID}`.
-    pub fn volume_guid_path(&self) -> &U16CStr {
-        unsafe { U16CStr::from_ptr_str(self.0.VolumeGuidName.0) }
+    pub fn volume_guid_path(&self) -> OsString {
+        unsafe { U16CStr::from_ptr_str(self.0.VolumeGuidName.0) }.to_os_string()
     }
 
     /// The letter of the current volume.
     ///
     /// The returned value comes in the form `X:`, where `X` is the drive letter.
-    pub fn volume_letter(&self) -> &U16CStr {
-        unsafe { U16CStr::from_ptr_str(self.0.VolumeDosName.0) }
+    pub fn volume_letter(&self) -> OsString {
+        unsafe { U16CStr::from_ptr_str(self.0.VolumeDosName.0) }.to_os_string()
     }
 
     /// The serial number of the current volume.
@@ -131,6 +121,16 @@ impl Request {
     // /// activity (meaning, no placeholder methods are invoked). If you are prone to this issue,
     // /// consider calling this method or call placeholder methods more frequently.
     // pub fn reset_timeout() {}
+
+    /// A raw connection key used to identify the connection.
+    pub(crate) fn connection_key(&self) -> RawConnectionKey {
+        self.0.ConnectionKey.0
+    }
+
+    /// A raw transfer key used to identify the current file operation.
+    pub(crate) fn transfer_key(&self) -> RawTransferKey {
+        self.0.TransferKey
+    }
 }
 
 /// Information about the calling process.
@@ -139,8 +139,8 @@ pub struct Process(CF_PROCESS_INFO);
 
 impl Process {
     /// The application's package name.
-    pub fn name(&self) -> &U16CStr {
-        unsafe { U16CStr::from_ptr_str(self.0.PackageName.0) }
+    pub fn name(&self) -> OsString {
+        unsafe { U16CStr::from_ptr_str(self.0.PackageName.0) }.to_os_string()
     }
 
     /// The ID of the user process.
@@ -149,20 +149,27 @@ impl Process {
     }
 
     /// The ID of the session where the user process resides.
+    ///
+    /// ## Note
+    ///
+    /// [session_id][crate::request::Process::session_id] is valid in versions 1803 and later.
     pub fn session_id(&self) -> u32 {
         self.0.SessionId
     }
 
     /// The application's ID.
-    pub fn application_id(&self) -> &U16CStr {
-        unsafe { U16CStr::from_ptr_str(self.0.ApplicationId.0) }
+    pub fn application_id(&self) -> OsString {
+        unsafe { U16CStr::from_ptr_str(self.0.ApplicationId.0) }.to_os_string()
     }
 
-    // TODO: command_line and session_id are valid only in versions 1803+
-    // https://docs.microsoft.com/en-us/windows/win32/api/cfapi/ns-cfapi-cf_process_infoessionid
     /// The exact command used to initialize the user process.
-    pub fn command_line(&self) -> &U16CStr {
-        unsafe { U16CStr::from_ptr_str(self.0.CommandLine.0) }
+    ///
+    /// ## Note
+    ///
+    /// [command_line][crate::request::Process::command_line] is valid in versions 1803 and later.
+    pub fn command_line(&self) -> Option<OsString> {
+        let cmd = unsafe { U16CStr::from_ptr_str(self.0.ImagePath.0) };
+        (cmd != u16cstr!("UNKNOWN")).then(|| cmd.to_os_string())
     }
 
     // TODO: Could be optimized
@@ -171,11 +178,7 @@ impl Process {
     /// This function returns [None][std::option::Option::None] when the operating system failed to
     /// retrieve the path.
     pub fn path(&self) -> Option<PathBuf> {
-        let path = unsafe { U16CString::from_ptr_str(self.0.ImagePath.0) };
-        if path == u16cstr!("UNKNOWN") {
-            None
-        } else {
-            Some(path.to_os_string().into())
-        }
+        let path = unsafe { U16CStr::from_ptr_str(self.0.ImagePath.0) };
+        (path != u16cstr!("UNKNOWN")).then(|| PathBuf::from(path.to_os_string()))
     }
 }
