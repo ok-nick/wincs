@@ -9,18 +9,18 @@ use std::{
 };
 
 use rkyv::{Archive, Deserialize, Serialize};
-use ssh2::{Session, Sftp};
+use ssh2::Sftp;
 use thiserror::Error;
 use widestring::{u16str, U16String};
 use wincs::{
+    error::CloudErrorKind,
     filter::{info, ticket, SyncFilter},
     metadata::Metadata,
-    nt_time::FileTime,
-    placeholder::ConvertOptions,
+    placeholder::{ConvertOptions, Placeholder},
     placeholder_file::PlaceholderFile,
     request::Request,
-    CloudErrorKind, HydrationType, Placeholder, PopulationType, Registration, SecurityId,
-    SyncRootIdBuilder, WriteAt,
+    root::{HydrationType, PopulationType, Registration, SecurityId, Session, SyncRootIdBuilder},
+    utility::{FileTime, WriteAt},
 };
 
 // max should be 65536, this is done both in term-scp and sshfs because it's the
@@ -38,7 +38,7 @@ pub struct FileBlob {
 
 fn main() {
     let tcp = TcpStream::connect(env::var("SERVER").unwrap()).unwrap();
-    let mut session = Session::new().unwrap();
+    let mut session = ssh2::Session::new().unwrap();
     session.set_blocking(true);
     session.set_tcp_stream(tcp);
     session.handshake().unwrap();
@@ -74,7 +74,7 @@ fn main() {
 
     mark_in_sync(Path::new(&client_path), &sftp);
 
-    let connection = wincs::Session::new()
+    let connection = Session::new()
         .connect(&client_path, Filter { sftp })
         .unwrap();
 

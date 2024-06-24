@@ -8,8 +8,11 @@ use windows::{
 use crate::{
     command::{self, Command, Fallible},
     error::CloudErrorKind,
+    placeholder_file::PlaceholderFile,
     request::{RawConnectionKey, RawTransferKey},
-    sealed, utility, PlaceholderFile, Usn,
+    sealed,
+    usn::Usn,
+    utility,
 };
 
 /// A ticket for the [SyncFilter::fetch_data][crate::SyncFilter::fetch_data] callback.

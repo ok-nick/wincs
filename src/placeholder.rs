@@ -21,7 +21,7 @@ use windows::{
     },
 };
 
-use crate::{metadata::Metadata, Usn};
+use crate::{metadata::Metadata, usn::Usn};
 
 /// The type of handle that the placeholder file/directory owns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

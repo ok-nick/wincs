@@ -21,7 +21,9 @@ use windows::{
     },
 };
 
-use crate::{utility::ToHString, SyncRootId};
+use crate::utility::ToHString;
+
+use super::SyncRootId;
 
 #[derive(Debug, Clone)]
 pub struct Registration<'a> {
