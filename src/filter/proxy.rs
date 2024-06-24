@@ -246,10 +246,12 @@ pub unsafe extern "system" fn notify_rename_completion<T: SyncFilter + 'static>(
     params: *const CF_CALLBACK_PARAMETERS,
 ) {
     if let Some(filter) = filter_from_info::<T>(info) {
-        filter.renamed(
-            Request::new(*info),
-            info::Renamed((*params).Anonymous.RenameCompletion),
+        let request = Request::new(*info);
+        let info = info::Renamed(
+            (*params).Anonymous.RenameCompletion,
+            request.volume_letter().to_os_string(),
         );
+        filter.renamed(request, info);
     }
 }
 
