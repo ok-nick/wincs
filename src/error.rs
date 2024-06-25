@@ -1,5 +1,8 @@
 use windows::Win32::Foundation::{self, NTSTATUS};
 
+/// [SyncFilter][crate::filter::SyncFilter] trait callback result type.
+pub type CResult<T> = std::result::Result<T, CloudErrorKind>;
+
 /// Predefined error types provided by the operating system.
 #[derive(Debug, Clone, Copy)]
 pub enum CloudErrorKind {

@@ -1,5 +1,5 @@
 use crate::{
-    error::CloudErrorKind,
+    error::{CResult, CloudErrorKind},
     filter::{info, ticket},
     request::Request,
 };
@@ -11,47 +11,44 @@ use crate::{
 pub trait SyncFilter: Send + Sync {
     /// A placeholder hydration has been requested. This means that the placeholder should be
     /// populated with its corresponding data on the remote.
-    fn fetch_data(&self, _request: Request, ticket: ticket::FetchData, _info: info::FetchData) {
-        #[allow(unused_must_use)]
-        {
-            ticket.fail(CloudErrorKind::NotSupported);
-        }
+    fn fetch_data(
+        &self,
+        _request: Request,
+        _ticket: ticket::FetchData,
+        _info: info::FetchData,
+    ) -> CResult<()> {
+        Err(CloudErrorKind::NotSupported)
     }
 
     /// A placeholder hydration request has been cancelled.
     fn cancel_fetch_data(&self, _request: Request, _info: info::CancelFetchData) {}
 
-    /// Followed by a successful call to [SyncFilter::fetch_data][crate::SyncFilter::fetch_data], this callback should verify the integrity of
+    /// Followed by a successful call to [SyncFilter::fetch_data][super::SyncFilter::fetch_data], this callback should verify the integrity of
     /// the data persisted in the placeholder.
     ///
-    /// **You** are responsible for validating the data in the placeholder. To approve or
-    /// disapprove the request, use the ticket provided.
+    /// **You** are responsible for validating the data in the placeholder. To approve
+    /// the request, use the ticket provided.
     ///
-    /// Note that this callback is only called if [HydrationPolicy::require_validation][crate::HydrationPolicy::require_validation] is specified.
+    /// Note that this callback is only called if [HydrationPolicy::require_validation][crate::root::HydrationPolicy::require_validation]
+    /// is specified.
     fn validate_data(
         &self,
         _request: Request,
-        ticket: ticket::ValidateData,
+        _ticket: ticket::ValidateData,
         _info: info::ValidateData,
-    ) {
-        #[allow(unused_must_use)]
-        {
-            ticket.fail(CloudErrorKind::NotSupported);
-        }
+    ) -> CResult<()> {
+        Err(CloudErrorKind::NotSupported)
     }
 
     /// A directory population has been requested. The behavior of this callback is dependent on
-    /// the [PopulationType][crate::PopulationType] variant specified during registration.
+    /// the [PopulationType][crate::root::PopulationType] variant specified during registration.
     fn fetch_placeholders(
         &self,
         _request: Request,
-        ticket: ticket::FetchPlaceholders,
+        _ticket: ticket::FetchPlaceholders,
         _info: info::FetchPlaceholders,
-    ) {
-        #[allow(unused_must_use)]
-        {
-            ticket.fail(CloudErrorKind::NotSupported);
-        }
+    ) -> CResult<()> {
+        Err(CloudErrorKind::NotSupported)
     }
 
     /// A directory population request has been cancelled.
@@ -69,12 +66,14 @@ pub trait SyncFilter: Send + Sync {
     /// the file will be __completely__ discarded.
     ///
     /// The operating system will handle dehydrating placeholder files automatically. However, it
-    /// is up to **you** to approve this. Use the ticket to approve or disapprove the request.
-    fn dehydrate(&self, _request: Request, ticket: ticket::Dehydrate, _info: info::Dehydrate) {
-        #[allow(unused_must_use)]
-        {
-            ticket.fail(CloudErrorKind::NotSupported);
-        }
+    /// is up to **you** to approve this. Use the ticket to approve the request.
+    fn dehydrate(
+        &self,
+        _request: Request,
+        _ticket: ticket::Dehydrate,
+        _info: info::Dehydrate,
+    ) -> CResult<()> {
+        Err(CloudErrorKind::NotSupported)
     }
 
     /// A placeholder dehydration request has been cancelled.
@@ -83,12 +82,14 @@ pub trait SyncFilter: Send + Sync {
     /// A placeholder file is about to be deleted.
     ///
     /// The operating system will handle deleting placeholder files automatically. However, it is
-    /// up to **you** to approve this. Use the ticket to approve or disapprove the request.
-    fn delete(&self, _request: Request, ticket: ticket::Delete, _info: info::Delete) {
-        #[allow(unused_must_use)]
-        {
-            ticket.fail(CloudErrorKind::NotSupported);
-        }
+    /// up to **you** to approve this. Use the ticket to approve the request.
+    fn delete(
+        &self,
+        _request: Request,
+        _ticket: ticket::Delete,
+        _info: info::Delete,
+    ) -> CResult<()> {
+        Err(CloudErrorKind::NotSupported)
     }
 
     /// A placeholder file has been deleted.
@@ -97,15 +98,17 @@ pub trait SyncFilter: Send + Sync {
     /// A placeholder file is about to be renamed or moved.
     ///
     /// The operating system will handle moving and renaming placeholder files automatically.
-    /// However, it is up to **you** to approve this. Use the ticket to approve or disapprove the
+    /// However, it is up to **you** to approve this. Use the ticket to approve the
     /// request.
     ///
     /// When the operation is completed, the [SyncFilter::renamed][crate::SyncFilter::renamed] callback will be called.
-    fn rename(&self, _request: Request, ticket: ticket::Rename, _info: info::Rename) {
-        #[allow(unused_must_use)]
-        {
-            ticket.fail(CloudErrorKind::NotSupported);
-        }
+    fn rename(
+        &self,
+        _request: Request,
+        _ticket: ticket::Rename,
+        _info: info::Rename,
+    ) -> CResult<()> {
+        Err(CloudErrorKind::NotSupported)
     }
 
     /// A placeholder file has been renamed or moved.

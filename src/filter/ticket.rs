@@ -6,13 +6,10 @@ use windows::{
 };
 
 use crate::{
-    command::{self, Command, Fallible},
-    error::CloudErrorKind,
+    command::{self, Command},
     placeholder_file::PlaceholderFile,
     request::{RawConnectionKey, RawTransferKey},
-    sealed,
-    usn::Usn,
-    utility,
+    sealed, utility,
 };
 
 /// A ticket for the [SyncFilter::fetch_data][crate::SyncFilter::fetch_data] callback.
@@ -29,11 +26,6 @@ impl FetchData {
             connection_key,
             transfer_key,
         }
-    }
-
-    /// Fail the callback with the specified error.
-    pub fn fail(&self, error_kind: CloudErrorKind) -> core::Result<()> {
-        command::Write::fail(self.connection_key, self.transfer_key, error_kind)
     }
 
     /// Displays a progress bar next to the file in the file explorer to show the progress of the
@@ -53,7 +45,7 @@ impl FetchData {
         Ok(())
     }
 
-    // TODO: response Command::Update
+    // TODO: response command::Update
 }
 
 impl utility::ReadAt for FetchData {
@@ -116,12 +108,7 @@ impl ValidateData {
         command::Validate { range }.execute(self.connection_key, self.transfer_key)
     }
 
-    /// Fail the callback with the specified error.
-    pub fn fail(&self, error_kind: CloudErrorKind) -> core::Result<()> {
-        command::Validate::fail(self.connection_key, self.transfer_key, error_kind)
-    }
-
-    // TODO: response Command::Update
+    // TODO: response command::Update
 }
 
 impl utility::ReadAt for ValidateData {
@@ -161,21 +148,12 @@ impl FetchPlaceholders {
     /// Creates a list of placeholder files/directorys on the file system.
     ///
     /// The value returned is the final [Usn][crate::Usn] (and if they succeeded) after each placeholder is created.
-    pub fn pass_with_placeholder(
-        &self,
-        placeholders: &mut [PlaceholderFile],
-    ) -> core::Result<Vec<core::Result<Usn>>> {
+    pub fn pass_with_placeholder(&self, placeholders: &mut [PlaceholderFile]) -> core::Result<()> {
         command::CreatePlaceholders {
             total: placeholders.len() as _,
             placeholders,
         }
         .execute(self.connection_key, self.transfer_key)
-    }
-
-    /// Fail the callback with the specified error.
-    pub fn fail(&self, error_kind: CloudErrorKind) -> core::Result<()> {
-        command::CreatePlaceholders::fail(self.connection_key, self.transfer_key, error_kind)
-            .and(Ok(()))
     }
 }
 
@@ -204,11 +182,6 @@ impl Dehydrate {
     pub fn pass_with_blob(&self, blob: &[u8]) -> core::Result<()> {
         command::Dehydrate { blob }.execute(self.connection_key, self.transfer_key)
     }
-
-    /// Fail the callback with the specified error.
-    pub fn fail(&self, error_kind: CloudErrorKind) -> core::Result<()> {
-        command::Dehydrate::fail(self.connection_key, self.transfer_key, error_kind)
-    }
 }
 
 /// A ticket for the [SyncFilter::delete][crate::SyncFilter::delete] callback.
@@ -231,11 +204,6 @@ impl Delete {
     pub fn pass(&self) -> core::Result<()> {
         command::Delete.execute(self.connection_key, self.transfer_key)
     }
-
-    /// Fail the callback with the specified error.
-    pub fn fail(&self, error_kind: CloudErrorKind) -> core::Result<()> {
-        command::Delete::fail(self.connection_key, self.transfer_key, error_kind)
-    }
 }
 
 /// A ticket for the [SyncFilter::rename][crate::SyncFilter::rename] callback.
@@ -257,10 +225,5 @@ impl Rename {
     /// Confirms the rename/move of a file.
     pub fn pass(&self) -> core::Result<()> {
         command::Rename.execute(self.connection_key, self.transfer_key)
-    }
-
-    /// Fail the callback with the specified error.
-    pub fn fail(&self, error_kind: CloudErrorKind) -> core::Result<()> {
-        command::Rename::fail(self.connection_key, self.transfer_key, error_kind)
     }
 }

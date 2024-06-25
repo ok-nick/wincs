@@ -1,4 +1,4 @@
-use std::{ops::Range, ptr, slice};
+use std::{ops::Range, ptr};
 
 use windows::{
     core,
@@ -19,7 +19,6 @@ use crate::{
     metadata::Metadata,
     placeholder_file::PlaceholderFile,
     request::{RawConnectionKey, RawTransferKey},
-    usn::Usn,
 };
 
 /// Read data from a placeholder file.
@@ -162,29 +161,10 @@ pub struct CreatePlaceholders<'a> {
 impl Command for CreatePlaceholders<'_> {
     const OPERATION: CF_OPERATION_TYPE = CloudFilters::CF_OPERATION_TYPE_TRANSFER_PLACEHOLDERS;
 
-    type Result = Vec<core::Result<Usn>>;
+    type Result = ();
     type Field = CF_OPERATION_PARAMETERS_0_7;
 
-    unsafe fn result(info: CF_OPERATION_PARAMETERS_0) -> Self::Result {
-        // iterate over the placeholders and return, in a new vector, whether or
-        // not they were created with their new USN
-        if info.TransferPlaceholders.PlaceholderCount == 0 {
-            return vec![];
-        }
-
-        slice::from_raw_parts(
-            info.TransferPlaceholders.PlaceholderArray,
-            info.TransferPlaceholders.PlaceholderCount as usize,
-        )
-        .iter()
-        .map(|placeholder| {
-            placeholder
-                .Result
-                .ok()
-                .map(|_| placeholder.CreateUsn as Usn)
-        })
-        .collect()
-    }
+    unsafe fn result(_info: CF_OPERATION_PARAMETERS_0) -> Self::Result {}
 
     fn build(&self) -> CF_OPERATION_PARAMETERS_0 {
         CF_OPERATION_PARAMETERS_0 {

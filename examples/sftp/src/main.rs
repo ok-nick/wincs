@@ -13,7 +13,7 @@ use ssh2::Sftp;
 use thiserror::Error;
 use widestring::{u16str, U16String};
 use wincs::{
-    error::CloudErrorKind,
+    error::{CResult, CloudErrorKind},
     filter::{info, ticket, SyncFilter},
     metadata::Metadata,
     placeholder::{ConvertOptions, Placeholder},
@@ -140,7 +140,12 @@ impl Filter {
 }
 
 impl SyncFilter for Filter {
-    fn fetch_data(&self, request: Request, ticket: ticket::FetchData, info: info::FetchData) {
+    fn fetch_data(
+        &self,
+        request: Request,
+        ticket: ticket::FetchData,
+        info: info::FetchData,
+    ) -> CResult<()> {
         let path = Path::new(unsafe { OsStr::from_encoded_bytes_unchecked(request.file_blob()) });
 
         let range = info.required_file_range();
@@ -153,112 +158,93 @@ impl SyncFilter for Filter {
             range,
             info.interrupted_hydration()
         );
+        let mut server_file = self
+            .sftp
+            .open(path)
+            .map_err(|_| CloudErrorKind::InvalidRequest)?;
+        server_file
+            .seek(SeekFrom::Start(position))
+            .map_err(|_| CloudErrorKind::InvalidRequest)?;
 
-        let res = || -> Result<(), _> {
-            let mut server_file = self
-                .sftp
-                .open(path)
+        let mut buffer = [0; DOWNLOAD_CHUNK_SIZE_BYTES];
+
+        loop {
+            let mut bytes_read = server_file
+                .read(&mut buffer)
                 .map_err(|_| CloudErrorKind::InvalidRequest)?;
-            server_file
-                .seek(SeekFrom::Start(position))
+
+            let unaligned = bytes_read % 4096;
+            if unaligned != 0 && position + (bytes_read as u64) < end {
+                bytes_read -= unaligned;
+                server_file
+                    .seek(SeekFrom::Current(-(unaligned as i64)))
+                    .unwrap();
+            }
+            ticket
+                .write_at(&buffer[0..bytes_read], position)
                 .map_err(|_| CloudErrorKind::InvalidRequest)?;
+            position += bytes_read as u64;
 
-            let mut buffer = [0; DOWNLOAD_CHUNK_SIZE_BYTES];
-
-            loop {
-                let mut bytes_read = server_file
-                    .read(&mut buffer)
-                    .map_err(|_| CloudErrorKind::InvalidRequest)?;
-
-                let unaligned = bytes_read % 4096;
-                if unaligned != 0 && position + (bytes_read as u64) < end {
-                    bytes_read -= unaligned;
-                    server_file
-                        .seek(SeekFrom::Current(-(unaligned as i64)))
-                        .unwrap();
-                }
-                ticket
-                    .write_at(&buffer[0..bytes_read], position)
-                    .map_err(|_| CloudErrorKind::InvalidRequest)?;
-                position += bytes_read as u64;
-
-                if position >= end {
-                    break;
-                }
-
-                ticket.report_progress(end, position).unwrap();
+            if position >= end {
+                break;
             }
 
-            Ok(())
-        }();
-
-        if let Err(e) = res {
-            ticket.fail(e).unwrap();
+            ticket.report_progress(end, position).unwrap();
         }
+
+        Ok(())
     }
 
     fn deleted(&self, _request: Request, _info: info::Deleted) {
         println!("deleted");
     }
 
-    fn delete(&self, request: Request, ticket: ticket::Delete, info: info::Delete) {
+    fn delete(&self, request: Request, ticket: ticket::Delete, info: info::Delete) -> CResult<()> {
         println!("delete {:?}", request.path());
         let path = Path::new(unsafe { OsStr::from_encoded_bytes_unchecked(request.file_blob()) });
-        let res = || -> Result<(), _> {
-            match info.is_directory() {
-                true => self
-                    .remove_remote_dir_all(path)
-                    .map_err(|_| CloudErrorKind::InvalidRequest)?,
-                false => self
-                    .sftp
-                    .unlink(path)
-                    .map_err(|_| CloudErrorKind::InvalidRequest)?,
-            }
-            ticket.pass().unwrap();
-            Ok(())
-        }();
-
-        if let Err(e) = res {
-            ticket.fail(e).unwrap();
+        match info.is_directory() {
+            true => self
+                .remove_remote_dir_all(path)
+                .map_err(|_| CloudErrorKind::InvalidRequest)?,
+            false => self
+                .sftp
+                .unlink(path)
+                .map_err(|_| CloudErrorKind::InvalidRequest)?,
         }
+        ticket.pass().unwrap();
+        Ok(())
     }
 
-    fn rename(&self, request: Request, ticket: ticket::Rename, info: info::Rename) {
-        let res = || -> Result<(), _> {
-            let src = request.path();
-            let dest = info.target_path();
-            let base = get_client_path();
+    fn rename(&self, request: Request, ticket: ticket::Rename, info: info::Rename) -> CResult<()> {
+        let src = request.path();
+        let dest = info.target_path();
+        let base = get_client_path();
 
-            println!(
-                "rename {} to {}, source in scope: {}, target in scope: {}",
-                src.display(),
-                dest.display(),
-                info.source_in_scope(),
-                info.target_in_scope()
-            );
+        println!(
+            "rename {} to {}, source in scope: {}, target in scope: {}",
+            src.display(),
+            dest.display(),
+            info.source_in_scope(),
+            info.target_in_scope()
+        );
 
-            match (info.source_in_scope(), info.target_in_scope()) {
-                (true, true) => {
-                    self.sftp
-                        .rename(
-                            src.strip_prefix(&base).unwrap(),
-                            dest.strip_prefix(&base).unwrap(),
-                            None,
-                        )
-                        .map_err(|_| CloudErrorKind::InvalidRequest)?;
-                }
-                (true, false) => {}
-                (false, true) => Err(CloudErrorKind::NotSupported)?, // TODO
-                (false, false) => Err(CloudErrorKind::InvalidRequest)?,
+        match (info.source_in_scope(), info.target_in_scope()) {
+            (true, true) => {
+                self.sftp
+                    .rename(
+                        src.strip_prefix(&base).unwrap(),
+                        dest.strip_prefix(&base).unwrap(),
+                        None,
+                    )
+                    .map_err(|_| CloudErrorKind::InvalidRequest)?;
             }
-
-            ticket.pass().unwrap();
-            Ok(())
-        }();
-
-        if let Err(e) = res {
-            ticket.fail(e).unwrap();
+            (true, false) => {}
+            (false, true) => Err(CloudErrorKind::NotSupported)?, // TODO
+            (false, false) => Err(CloudErrorKind::InvalidRequest)?,
         }
+
+        ticket.pass().unwrap();
+        Ok(())
     }
 
     fn fetch_placeholders(
@@ -266,7 +252,7 @@ impl SyncFilter for Filter {
         request: Request,
         ticket: ticket::FetchPlaceholders,
         info: info::FetchPlaceholders,
-    ) {
+    ) -> CResult<()> {
         println!(
             "fetch_placeholders {:?} {:?}",
             request.path(),
@@ -276,7 +262,10 @@ impl SyncFilter for Filter {
         let client_path = get_client_path();
         let parent = absolute.strip_prefix(&client_path).unwrap();
 
-        let dirs = self.sftp.readdir(parent).unwrap();
+        let dirs = self
+            .sftp
+            .readdir(parent)
+            .map_err(|_| CloudErrorKind::InvalidRequest)?;
         let mut placeholders = dirs
             .into_iter()
             .filter(|(path, _)| !Path::new(&client_path).join(path).exists())
@@ -305,6 +294,8 @@ impl SyncFilter for Filter {
             .collect::<Vec<_>>();
 
         ticket.pass_with_placeholder(&mut placeholders).unwrap();
+
+        Ok(())
     }
 
     fn closed(&self, request: Request, info: info::Closed) {
@@ -318,14 +309,11 @@ impl SyncFilter for Filter {
     fn validate_data(
         &self,
         _request: Request,
-        ticket: ticket::ValidateData,
+        _ticket: ticket::ValidateData,
         _info: info::ValidateData,
-    ) {
+    ) -> CResult<()> {
         println!("validate_data");
-        #[allow(unused_must_use)]
-        {
-            ticket.fail(CloudErrorKind::NotSupported);
-        }
+        Err(CloudErrorKind::NotSupported)
     }
 
     fn cancel_fetch_placeholders(&self, _request: Request, _info: info::CancelFetchPlaceholders) {
@@ -336,12 +324,14 @@ impl SyncFilter for Filter {
         println!("opened: {:?}", request.path());
     }
 
-    fn dehydrate(&self, _request: Request, ticket: ticket::Dehydrate, _info: info::Dehydrate) {
+    fn dehydrate(
+        &self,
+        _request: Request,
+        _ticket: ticket::Dehydrate,
+        _info: info::Dehydrate,
+    ) -> CResult<()> {
         println!("dehydrate");
-        #[allow(unused_must_use)]
-        {
-            ticket.fail(CloudErrorKind::NotSupported);
-        }
+        Err(CloudErrorKind::NotSupported)
     }
 
     fn dehydrated(&self, _request: Request, _info: info::Dehydrated) {

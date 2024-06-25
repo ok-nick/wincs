@@ -7,6 +7,7 @@ use windows::Win32::Storage::CloudFilters::{
 };
 
 use crate::{
+    command::{self, Fallible},
     filter::{info, ticket, SyncFilter},
     request::Request,
 };
@@ -82,13 +83,19 @@ pub unsafe extern "system" fn fetch_data<T: SyncFilter + 'static>(
 ) {
     if let Some(filter) = filter_from_info::<T>(info) {
         let request = Request::new(*info);
-        let ticket = ticket::FetchData::new(request.connection_key(), request.transfer_key());
+        let connection_key = request.connection_key();
+        let transfer_key = request.transfer_key();
+        let ticket = ticket::FetchData::new(connection_key, transfer_key);
 
-        filter.fetch_data(
+        let Err(e) = filter.fetch_data(
             request,
             ticket,
             info::FetchData((*params).Anonymous.FetchData),
-        );
+        ) else {
+            return;
+        };
+
+        command::Write::fail(connection_key, transfer_key, e).unwrap();
     }
 }
 
@@ -98,13 +105,19 @@ pub unsafe extern "system" fn validate_data<T: SyncFilter + 'static>(
 ) {
     if let Some(filter) = filter_from_info::<T>(info) {
         let request = Request::new(*info);
-        let ticket = ticket::ValidateData::new(request.connection_key(), request.transfer_key());
+        let connection_key = request.connection_key();
+        let transfer_key = request.transfer_key();
+        let ticket = ticket::ValidateData::new(connection_key, transfer_key);
 
-        filter.validate_data(
+        let Err(e) = filter.validate_data(
             request,
             ticket,
             info::ValidateData((*params).Anonymous.ValidateData),
-        );
+        ) else {
+            return;
+        };
+
+        command::Validate::fail(connection_key, transfer_key, e).unwrap();
     }
 }
 
@@ -126,14 +139,19 @@ pub unsafe extern "system" fn fetch_placeholders<T: SyncFilter + 'static>(
 ) {
     if let Some(filter) = filter_from_info::<T>(info) {
         let request = Request::new(*info);
-        let ticket =
-            ticket::FetchPlaceholders::new(request.connection_key(), request.transfer_key());
+        let connection_key = request.connection_key();
+        let transfer_key = request.transfer_key();
+        let ticket = ticket::FetchPlaceholders::new(connection_key, transfer_key);
 
-        filter.fetch_placeholders(
+        let Err(e) = filter.fetch_placeholders(
             request,
             ticket,
             info::FetchPlaceholders((*params).Anonymous.FetchPlaceholders),
-        );
+        ) else {
+            return;
+        };
+
+        command::CreatePlaceholders::fail(connection_key, transfer_key, e).unwrap();
     }
 }
 
@@ -179,13 +197,19 @@ pub unsafe extern "system" fn notify_dehydrate<T: SyncFilter + 'static>(
 ) {
     if let Some(filter) = filter_from_info::<T>(info) {
         let request = Request::new(*info);
-        let ticket = ticket::Dehydrate::new(request.connection_key(), request.transfer_key());
+        let connection_key = request.connection_key();
+        let transfer_key = request.transfer_key();
+        let ticket = ticket::Dehydrate::new(connection_key, transfer_key);
 
-        filter.dehydrate(
+        let Err(e) = filter.dehydrate(
             request,
             ticket,
             info::Dehydrate((*params).Anonymous.Dehydrate),
-        );
+        ) else {
+            return;
+        };
+
+        command::Dehydrate::fail(connection_key, transfer_key, e).unwrap();
     }
 }
 
@@ -207,9 +231,16 @@ pub unsafe extern "system" fn notify_delete<T: SyncFilter + 'static>(
 ) {
     if let Some(filter) = filter_from_info::<T>(info) {
         let request = Request::new(*info);
-        let ticket = ticket::Delete::new(request.connection_key(), request.transfer_key());
+        let connection_key = request.connection_key();
+        let transfer_key = request.transfer_key();
+        let ticket = ticket::Delete::new(connection_key, transfer_key);
 
-        filter.delete(request, ticket, info::Delete((*params).Anonymous.Delete));
+        let Err(e) = filter.delete(request, ticket, info::Delete((*params).Anonymous.Delete))
+        else {
+            return;
+        };
+
+        command::Delete::fail(connection_key, transfer_key, e).unwrap();
     }
 }
 
@@ -231,10 +262,16 @@ pub unsafe extern "system" fn notify_rename<T: SyncFilter + 'static>(
 ) {
     if let Some(filter) = filter_from_info::<T>(info) {
         let request = Request::new(*info);
-        let ticket = ticket::Rename::new(request.connection_key(), request.transfer_key());
+        let connection_key = request.connection_key();
+        let transfer_key = request.transfer_key();
+        let ticket = ticket::Rename::new(connection_key, transfer_key);
         let info = info::Rename((*params).Anonymous.Rename, request.volume_letter());
 
-        filter.rename(request, ticket, info);
+        let Err(e) = filter.rename(request, ticket, info) else {
+            return;
+        };
+
+        command::Rename::fail(connection_key, transfer_key, e).unwrap();
     }
 }
 
