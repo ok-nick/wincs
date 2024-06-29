@@ -80,7 +80,7 @@ fn main() {
 
     wait_for_ctrlc();
 
-    connection.disconnect().unwrap();
+    drop(connection);
     sync_root_id.unregister().unwrap();
 }
 
@@ -340,6 +340,10 @@ impl SyncFilter for Filter {
 
     fn renamed(&self, _request: Request, _info: info::Renamed) {
         println!("renamed");
+    }
+
+    fn state_changed(&self, changes: Vec<std::path::PathBuf>) {
+        println!("state_changed: {:?}", changes);
     }
 }
 

@@ -1,16 +1,34 @@
 use std::{
     ffi::OsString,
-    path::Path,
-    sync::{Arc, Weak},
+    fs::OpenOptions,
+    mem::{self, MaybeUninit},
+    os::windows::{fs::OpenOptionsExt, io::AsRawHandle},
+    path::{Path, PathBuf},
+    ptr,
+    sync::{
+        mpsc::{self, Sender, TryRecvError},
+        Arc, Weak,
+    },
+    thread::{self, JoinHandle},
+    time::Duration,
 };
 
+use widestring::U16Str;
 use windows::{
     core,
     Win32::{
-        Storage::CloudFilters::{self, CfConnectSyncRoot, CF_CONNECT_FLAGS},
+        Foundation::{ERROR_IO_INCOMPLETE, HANDLE},
+        Storage::{
+            CloudFilters::{self, CfConnectSyncRoot, CF_CONNECT_FLAGS},
+            FileSystem::{
+                ReadDirectoryChangesW, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OVERLAPPED,
+                FILE_LIST_DIRECTORY, FILE_NOTIFY_CHANGE_ATTRIBUTES, FILE_NOTIFY_INFORMATION,
+            },
+        },
         System::{
             Com::{self, CoCreateInstance},
             Search::{self, ISearchCatalogManager, ISearchManager},
+            IO::{CancelIoEx, GetOverlappedResult},
         },
     },
 };
@@ -53,7 +71,7 @@ impl Session {
 
         let filter = Arc::new(filter);
         let callbacks = filter::callbacks::<T>();
-        unsafe {
+        let key = unsafe {
             CfConnectSyncRoot(
                 path.as_ref().as_os_str(),
                 callbacks.as_ptr(),
@@ -66,8 +84,18 @@ impl Session {
                     | CloudFilters::CF_CONNECT_FLAG_REQUIRE_FULL_FILE_PATH
                     | CloudFilters::CF_CONNECT_FLAG_REQUIRE_PROCESS_INFO,
             )
-        }
-        .map(|key| Connection::new(key.0, callbacks, filter))
+        }?;
+
+        let (cancel_token, join_handle) =
+            spawn_root_watcher(path.as_ref().to_path_buf(), filter.clone());
+
+        Ok(Connection::new(
+            key.0,
+            cancel_token,
+            join_handle,
+            callbacks,
+            filter,
+        ))
     }
 }
 
@@ -94,4 +122,97 @@ fn index_path(path: &Path) -> core::Result<()> {
         crawler.AddDefaultScopeRule(url, true, Search::FF_INDEXCOMPLEXURLS.0 as u32)?;
         crawler.SaveAll()
     }
+}
+
+fn spawn_root_watcher<T: SyncFilter + 'static>(
+    path: PathBuf,
+    filter: Arc<T>,
+) -> (Sender<()>, JoinHandle<()>) {
+    let (tx, rx) = mpsc::channel();
+    let handle = thread::spawn(move || {
+        const CHANGE_BUF_SIZE: usize = 1024;
+
+        let sync_root = OpenOptions::new()
+            .access_mode(FILE_LIST_DIRECTORY.0)
+            .custom_flags((FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED).0)
+            .open(&path)
+            .expect("sync root directory is opened");
+        let mut changes_buf = MaybeUninit::<[u8; CHANGE_BUF_SIZE]>::zeroed();
+        let mut overlapped = MaybeUninit::zeroed();
+        let mut transferred = MaybeUninit::zeroed();
+
+        while matches!(rx.try_recv(), Err(TryRecvError::Empty)) {
+            unsafe {
+                ReadDirectoryChangesW(
+                    HANDLE(sync_root.as_raw_handle() as _),
+                    changes_buf.as_mut_ptr() as *mut _,
+                    CHANGE_BUF_SIZE as _,
+                    true,
+                    FILE_NOTIFY_CHANGE_ATTRIBUTES,
+                    ptr::null_mut(),
+                    overlapped.as_mut_ptr(),
+                    None,
+                )
+            }
+            .ok()
+            .expect("read directory changes");
+
+            loop {
+                if unsafe {
+                    !GetOverlappedResult(
+                        HANDLE(sync_root.as_raw_handle() as _),
+                        overlapped.as_mut_ptr(),
+                        transferred.as_mut_ptr(),
+                        false,
+                    )
+                }
+                .into()
+                {
+                    let win32_err = core::Error::from_win32().win32_error();
+                    if win32_err != Some(ERROR_IO_INCOMPLETE) {
+                        panic!(
+                            "get overlapped result: {win32_err:?}, expected: {ERROR_IO_INCOMPLETE:?}"
+                        );
+                    }
+
+                    // cancel by user
+                    if !matches!(rx.try_recv(), Err(TryRecvError::Empty)) {
+                        unsafe {
+                            CancelIoEx(
+                                HANDLE(sync_root.as_raw_handle() as _),
+                                overlapped.as_mut_ptr(),
+                            )
+                        };
+                        return;
+                    }
+
+                    thread::sleep(Duration::from_millis(300));
+                    continue;
+                }
+
+                if unsafe { transferred.assume_init() } == 0 {
+                    break;
+                }
+
+                let mut changes = Vec::with_capacity(8);
+                let mut entry = changes_buf.as_ptr() as *const FILE_NOTIFY_INFORMATION;
+                while !entry.is_null() {
+                    let relative = unsafe {
+                        U16Str::from_ptr(
+                            &(*entry).FileName as *const _,
+                            (*entry).FileNameLength as usize / mem::size_of::<u16>(),
+                        )
+                    };
+
+                    changes.push(path.join(relative.to_os_string()));
+                    entry = (unsafe { *entry }).NextEntryOffset as *const _;
+                }
+
+                filter.state_changed(changes);
+                break;
+            }
+        }
+    });
+
+    (tx, handle)
 }

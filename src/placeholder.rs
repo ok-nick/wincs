@@ -292,7 +292,6 @@ impl ConvertOptions {
         self
     }
 
-    // TODO: make the name of this function more specific
     /// Marks the placeholder as "partially full," such that [SyncFilter::fetch_placeholders][crate::SyncFilter::fetch_placeholders]
     /// will be invoked when this directory is next accessed so that the remaining placeholders are inserted.
     ///
@@ -603,6 +602,15 @@ pub struct Placeholder {
 }
 
 impl Placeholder {
+    /// Create a placeholder from a raw handle.
+    ///
+    /// # Safety
+    ///
+    /// The passed handle must be a valid protected handle or win32 handle.
+    pub unsafe fn from_raw_handle(handle: OwnedPlaceholderHandle) -> Self {
+        Self { handle }
+    }
+
     /// Open options for opening [Placeholder][crate::Placeholder]s.
     pub fn options() -> OpenOptions {
         OpenOptions::default()
@@ -814,6 +822,11 @@ impl Placeholder {
             win32_handle,
             protected_handle: handle,
         })
+    }
+
+    /// Returns the owned placeholder handle.
+    pub fn inner_handle(&self) -> &OwnedPlaceholderHandle {
+        &self.handle
     }
 
     /// Hydrates a placeholder file by ensuring that the specified byte range is present on-disk

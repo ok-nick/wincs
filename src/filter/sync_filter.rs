@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::{
     error::{CResult, CloudErrorKind},
     filter::{info, ticket},
@@ -113,4 +115,14 @@ pub trait SyncFilter: Send + Sync {
 
     /// A placeholder file has been renamed or moved.
     fn renamed(&self, _request: Request, _info: info::Renamed) {}
+
+    /// Placeholder for changed attributes under the sync root.
+    ///
+    /// This callback is implemented using [ReadDirectoryChangesW][https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-readdirectorychangesw]
+    /// so it is not provided by the `Cloud Filter APIs`.
+    ///
+    /// This callback is used to detect when a user pins or unpins a placeholder file, etc.
+    ///
+    /// See also [Cloud Files API Frequently Asked Questions](https://www.userfilesystem.com/programming/faq/).
+    fn state_changed(&self, _changes: Vec<PathBuf>) {}
 }

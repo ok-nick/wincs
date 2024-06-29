@@ -1,7 +1,10 @@
-use windows::{
-    core,
-    Win32::Storage::CloudFilters::{CfDisconnectSyncRoot, CF_CONNECTION_KEY},
+use std::{
+    sync::mpsc::Sender,
+    thread::{self, JoinHandle},
+    time::Duration,
 };
+
+use windows::Win32::Storage::CloudFilters::{CfDisconnectSyncRoot, CF_CONNECTION_KEY};
 
 use crate::{filter::Callbacks, request::RawConnectionKey};
 
@@ -18,6 +21,10 @@ use crate::{filter::Callbacks, request::RawConnectionKey};
 #[derive(Debug)]
 pub struct Connection<T> {
     connection_key: RawConnectionKey,
+
+    cancel_token: Sender<()>,
+    join_handle: JoinHandle<()>,
+
     _callbacks: Callbacks,
     filter: T,
 }
@@ -25,9 +32,17 @@ pub struct Connection<T> {
 // this struct could house many more windows api functions, although they all seem to do nothing
 // according to the threads on microsoft q&a
 impl<T> Connection<T> {
-    pub(crate) fn new(connection_key: RawConnectionKey, callbacks: Callbacks, filter: T) -> Self {
+    pub(crate) fn new(
+        connection_key: RawConnectionKey,
+        cancel_token: Sender<()>,
+        join_handle: JoinHandle<()>,
+        callbacks: Callbacks,
+        filter: T,
+    ) -> Self {
         Self {
             connection_key,
+            cancel_token,
+            join_handle,
             _callbacks: callbacks,
             filter,
         }
@@ -42,23 +57,15 @@ impl<T> Connection<T> {
     pub fn filter(&self) -> &T {
         &self.filter
     }
-
-    /// Disconnects the sync root, read [Connection][crate::Connection] for more information.
-    pub fn disconnect(self) -> core::Result<()> {
-        self.disconnect_ref()
-    }
-
-    #[inline]
-    fn disconnect_ref(&self) -> core::Result<()> {
-        unsafe { CfDisconnectSyncRoot(CF_CONNECTION_KEY(self.connection_key)) }
-    }
 }
 
 impl<T> Drop for Connection<T> {
     fn drop(&mut self) {
-        #[allow(unused_must_use)]
-        {
-            self.disconnect_ref();
+        unsafe { CfDisconnectSyncRoot(CF_CONNECTION_KEY(self.connection_key)) }.unwrap();
+
+        _ = self.cancel_token.send(());
+        while !self.join_handle.is_finished() {
+            thread::sleep(Duration::from_millis(150));
         }
     }
 }
