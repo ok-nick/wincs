@@ -31,6 +31,18 @@ where
             .get()?,
         )
     }
+
+    // FIXME: This function is not work at all, the CF_PLACEHOLDER_STATE always be 0 or 1
+    // fn placeholder_state(&self) -> core::Result<CF_PLACEHOLDER_STATE> {
+    //     let path = U16CString::from_os_str(self.as_ref()).unwrap();
+    //     let mut file_data = MaybeUninit::zeroed();
+    //     unsafe {
+    //         FindFirstFileW(PCWSTR(path.as_ptr()), file_data.as_mut_ptr());
+    //         Ok(CfGetPlaceholderStateFromFindData(
+    //             file_data.assume_init_ref() as *const _ as *const _,
+    //         ))
+    //     }
+    // }
 }
 
 impl<T: AsRef<Path>> PathExt for T {}

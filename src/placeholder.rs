@@ -1,8 +1,9 @@
 use std::{
+    fmt::Debug,
     fs::File,
-    mem,
-    ops::Range,
-    os::windows::io::{FromRawHandle, IntoRawHandle},
+    mem::{self, MaybeUninit},
+    ops::{Bound, Range, RangeBounds},
+    os::windows::io::{AsRawHandle, FromRawHandle, IntoRawHandle, RawHandle},
     path::Path,
     ptr,
 };
@@ -11,12 +12,17 @@ use widestring::U16CString;
 use windows::{
     core::{self, PCWSTR},
     Win32::{
-        Foundation::{CloseHandle, ERROR_NOT_A_CLOUD_FILE, HANDLE},
+        Foundation::{
+            CloseHandle, BOOL, ERROR_NOT_A_CLOUD_FILE, E_HANDLE, HANDLE, INVALID_HANDLE_VALUE,
+        },
         Storage::CloudFilters::{
             self, CfCloseHandle, CfConvertToPlaceholder, CfGetPlaceholderInfo,
-            CfOpenFileWithOplock, CfRevertPlaceholder, CfSetInSyncState, CfSetPinState,
-            CfUpdatePlaceholder, CF_CONVERT_FLAGS, CF_FILE_RANGE, CF_OPEN_FILE_FLAGS, CF_PIN_STATE,
-            CF_PLACEHOLDER_STANDARD_INFO, CF_SET_PIN_FLAGS, CF_UPDATE_FLAGS,
+            CfGetPlaceholderRangeInfo, CfGetWin32HandleFromProtectedHandle, CfHydratePlaceholder,
+            CfOpenFileWithOplock, CfReferenceProtectedHandle, CfReleaseProtectedHandle,
+            CfRevertPlaceholder, CfSetInSyncState, CfSetPinState, CfUpdatePlaceholder,
+            CF_CONVERT_FLAGS, CF_FILE_RANGE, CF_OPEN_FILE_FLAGS, CF_PIN_STATE,
+            CF_PLACEHOLDER_RANGE_INFO_CLASS, CF_PLACEHOLDER_STANDARD_INFO, CF_SET_PIN_FLAGS,
+            CF_UPDATE_FLAGS,
         },
     },
 };
@@ -85,6 +91,54 @@ impl Drop for OwnedPlaceholderHandle {
         }
     }
 }
+
+/// Holds a Win32 handle from the protected handle.
+///
+/// The reference count will increase when the [ArcWin32Handle] is cloned
+/// and decrease when the [ArcWin32Handle] is dropped.
+pub struct ArcWin32Handle {
+    win32_handle: HANDLE,
+    protected_handle: HANDLE,
+}
+
+impl ArcWin32Handle {
+    /// Win32 handle from the protected handle.
+    pub fn handle(&self) -> HANDLE {
+        self.win32_handle
+    }
+}
+
+impl Clone for ArcWin32Handle {
+    fn clone(&self) -> Self {
+        if self.protected_handle != INVALID_HANDLE_VALUE {
+            unsafe { CfReferenceProtectedHandle(self.protected_handle) };
+        }
+
+        Self {
+            win32_handle: self.win32_handle,
+            protected_handle: self.protected_handle,
+        }
+    }
+}
+
+impl AsRawHandle for ArcWin32Handle {
+    fn as_raw_handle(&self) -> RawHandle {
+        unsafe { mem::transmute(self.win32_handle) }
+    }
+}
+
+impl Drop for ArcWin32Handle {
+    fn drop(&mut self) {
+        if self.protected_handle != INVALID_HANDLE_VALUE {
+            unsafe { CfReleaseProtectedHandle(self.protected_handle) };
+        }
+    }
+}
+
+/// Safety: reference counted by syscall
+unsafe impl Send for ArcWin32Handle {}
+/// Safety: reference counted by syscall
+unsafe impl Sync for ArcWin32Handle {}
 
 /// Options for opening a placeholder file/directory.
 pub struct OpenOptions {
@@ -306,9 +360,11 @@ impl PlaceholderInfo {
     pub fn validated_data_size(&self) -> i64 {
         unsafe { &*self.info }.ValidatedDataSize
     }
+
     pub fn modified_data_size(&self) -> i64 {
         unsafe { &*self.info }.ModifiedDataSize
     }
+
     pub fn properties_size(&self) -> i64 {
         unsafe { &*self.info }.PropertiesSize
     }
@@ -469,6 +525,77 @@ impl Default for UpdateOptions<'_> {
     }
 }
 
+/// The type of data to read from a placeholder.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum ReadType {
+    /// Any data that is saved to the disk.
+    Any,
+    /// Data that has been synced to the cloud.
+    Validated,
+    /// Data that has not synced to the cloud.
+    Modified,
+}
+
+impl From<ReadType> for CF_PLACEHOLDER_RANGE_INFO_CLASS {
+    fn from(read_type: ReadType) -> Self {
+        match read_type {
+            ReadType::Any => CloudFilters::CF_PLACEHOLDER_RANGE_INFO_ONDISK,
+            ReadType::Validated => CloudFilters::CF_PLACEHOLDER_RANGE_INFO_VALIDATED,
+            ReadType::Modified => CloudFilters::CF_PLACEHOLDER_RANGE_INFO_MODIFIED,
+        }
+    }
+}
+
+// #[derive(Clone, Copy)]
+// pub struct PlaceholderState(CF_PLACEHOLDER_STATE);
+
+// impl PlaceholderState {
+//     /// The placeholder is both a directory as well as the sync root.
+//     pub fn sync_root(&self) -> bool {
+//         (self.0 & CloudFilters::CF_PLACEHOLDER_STATE_SYNC_ROOT).0 != 0
+//     }
+
+//     /// There exists an essential property in the property store of the file or directory.
+//     pub fn essential_prop_present(&self) -> bool {
+//         (self.0 & CloudFilters::CF_PLACEHOLDER_STATE_ESSENTIAL_PROP_PRESENT).0 != 0
+//     }
+
+//     /// The placeholder is in sync.
+//     pub fn in_sync(&self) -> bool {
+//         (self.0 & CloudFilters::CF_PLACEHOLDER_STATE_IN_SYNC).0 != 0
+//     }
+
+//     /// The placeholder content is not ready to be consumed by the user application,
+//     /// though it may or may not be fully present locally.
+//     ///
+//     /// An example is a placeholder file whose content has been fully downloaded to the local disk,
+//     /// but is yet to be validated by a sync provider that
+//     /// has registered the sync root with the hydration modifier
+//     /// [HydrationPolicy::require_validation][crate::root::HydrationPolicy::require_validation].
+//     pub fn partial(&self) -> bool {
+//         (self.0 & CloudFilters::CF_PLACEHOLDER_STATE_PARTIAL).0 != 0
+//     }
+
+//     /// The placeholder content is not fully present locally.
+//     ///
+//     /// When this is set, [PlaceholderState::partial] also be `true`.
+//     pub fn partial_on_disk(&self) -> bool {
+//         (self.0 & CloudFilters::CF_PLACEHOLDER_STATE_PARTIALLY_ON_DISK).0 != 0
+//     }
+// }
+
+// impl Debug for PlaceholderState {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.debug_struct("PlaceholderState")
+//             .field("sync_root", &self.sync_root())
+//             .field("essential_prop_present", &self.essential_prop_present())
+//             .field("in_sync", &self.in_sync())
+//             .field("partial", &self.partial())
+//             .field("partial_on_disk", &self.partial_on_disk())
+//             .finish()
+//     }
+// }
+
 /// A struct to perform various operations on a placeholder(or regular) file/directory.
 #[derive(Debug)]
 pub struct Placeholder {
@@ -616,6 +743,107 @@ impl Placeholder {
         }?;
 
         Ok(self)
+    }
+
+    /// Retrieves data from a placeholder.
+    pub fn retrieve_data(
+        &self,
+        read_type: ReadType,
+        offset: u64,
+        buffer: &mut [u8],
+    ) -> core::Result<u32> {
+        let mut length = MaybeUninit::zeroed();
+        unsafe {
+            CfGetPlaceholderRangeInfo(
+                self.handle.handle,
+                read_type.into(),
+                offset as i64,
+                buffer.len() as i64,
+                buffer as *mut _ as *mut _,
+                buffer.len() as u32,
+                length.assume_init_mut(),
+            )
+            .map(|_| length.assume_init())
+        }
+    }
+
+    // FIXME: This function is not work at all, the CF_PLACEHOLDER_STATE always be 0 or 1
+    // pub fn state(&self) -> core::Result<Option<PlaceholderState>> {
+    //     let mut info = MaybeUninit::<FILE_ATTRIBUTE_TAG_INFO>::zeroed();
+    //     let win32_handle = self.win32_handle()?;
+    //     let state = unsafe {
+    //         GetFileInformationByHandleEx(
+    //             win32_handle.win32_handle,
+    //             FileSystem::FileAttributeTagInfo,
+    //             info.as_mut_ptr() as *mut _,
+    //             mem::size_of::<FILE_ATTRIBUTE_TAG_INFO>() as u32,
+    //         )
+    //         .ok()
+    //         .inspect_err(|e| println!("GetFileInformationByHandleEx: {e:#?}"))?;
+
+    //         CfGetPlaceholderStateFromFileInfo(
+    //             info.assume_init_ref() as *const _ as *const _,
+    //             FileSystem::FileAttributeTagInfo,
+    //         )
+    //     };
+
+    //     match state {
+    //         CloudFilters::CF_PLACEHOLDER_STATE_INVALID => Err(core::Error::from_win32()),
+    //         CloudFilters::CF_PLACEHOLDER_STATE_NO_STATES => Ok(None),
+    //         s => Ok(Some(PlaceholderState(s))),
+    //     }
+    // }
+
+    /// Returns the Win32 handle from protected handle.
+    ///
+    /// Returns `Err(E_HANDLE)` if the [OwnedPlaceholderHandle::handle_type] is not [PlaceholderHandleType::CfApi].
+    pub fn win32_handle(&self) -> core::Result<ArcWin32Handle> {
+        let (handle, win32_handle) = match self.handle.handle_type {
+            PlaceholderHandleType::CfApi => {
+                let win32_handle = unsafe {
+                    CfReferenceProtectedHandle(self.handle.handle).ok()?;
+                    CfGetWin32HandleFromProtectedHandle(self.handle.handle)
+                };
+                BOOL::from(!win32_handle.is_invalid()).ok()?;
+                (self.handle.handle, win32_handle)
+            }
+            PlaceholderHandleType::Win32 => Err(core::Error::from(E_HANDLE))?,
+        };
+
+        Ok(ArcWin32Handle {
+            win32_handle,
+            protected_handle: handle,
+        })
+    }
+
+    /// Hydrates a placeholder file by ensuring that the specified byte range is present on-disk
+    /// in the placeholder. This is valid for files only.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the start bound is greater than [i64::MAX] or
+    /// the end bound sub start bound is greater than [i64::MAX].
+    ///
+    /// See also [CfHydratePlaceholder](https://learn.microsoft.com/en-us/windows/win32/api/cfapi/nf-cfapi-cfhydrateplaceholder)
+    /// and [discussion](https://docs.microsoft.com/en-us/windows/win32/api/cfapi/nf-cfapi-cfhydrateplaceholder#remarks).
+    pub fn hydrate(&mut self, range: impl RangeBounds<u64>) -> core::Result<()> {
+        unsafe {
+            CfHydratePlaceholder(
+                self.handle.handle,
+                match range.start_bound() {
+                    Bound::Included(x) => (*x).try_into().unwrap(),
+                    Bound::Excluded(x) => (x + 1).try_into().unwrap(),
+                    Bound::Unbounded => 0,
+                },
+                match range.end_bound() {
+                    Bound::Included(x) => (*x).try_into().unwrap(),
+                    Bound::Excluded(x) => (x - 1).try_into().unwrap(),
+                    Bound::Unbounded => -1,
+                },
+                CloudFilters::CF_HYDRATE_FLAG_NONE,
+                ptr::null_mut(),
+            )
+        }
     }
 }
 

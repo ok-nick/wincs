@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    mem::{self, MaybeUninit},
+    mem,
     ops::{Bound, RangeBounds},
     os::windows::{io::AsRawHandle, prelude::RawHandle},
     ptr,
@@ -11,48 +11,20 @@ use windows::{
     core,
     Win32::{
         Foundation::HANDLE,
-        Storage::{
-            CloudFilters::{
-                self, CfDehydratePlaceholder, CfGetPlaceholderRangeInfo,
-                CfGetPlaceholderStateFromFileInfo, CfGetSyncRootInfoByHandle, CfHydratePlaceholder,
-                CfSetInSyncState, CF_PLACEHOLDER_RANGE_INFO_CLASS, CF_PLACEHOLDER_STATE,
-                CF_SYNC_PROVIDER_STATUS, CF_SYNC_ROOT_STANDARD_INFO,
-            },
-            FileSystem::{self, GetFileInformationByHandleEx, FILE_ATTRIBUTE_TAG_INFO},
+        Storage::CloudFilters::{
+            self, CfDehydratePlaceholder, CfGetSyncRootInfoByHandle, CF_SYNC_PROVIDER_STATUS,
+            CF_SYNC_ROOT_STANDARD_INFO,
         },
     },
 };
 
 use crate::{
     root::{HydrationPolicy, HydrationType, PopulationType, SupportedAttributes},
-    usn::Usn,
+    sealed::Sealed,
 };
 
 /// An API extension to [File][std::fs::File].
-pub trait FileExt: AsRawHandle {
-    /// Hydrates a placeholder file.
-    // TODO: doc restrictions. I believe the remarks are wrong in that this call requires both read
-    // and write access? https://docs.microsoft.com/en-us/windows/win32/api/cfapi/nf-cfapi-cfhydrateplaceholder#remarks
-    fn hydrate<T: RangeBounds<u64>>(&self, range: T) -> core::Result<()> {
-        unsafe {
-            CfHydratePlaceholder(
-                HANDLE(self.as_raw_handle() as isize),
-                match range.start_bound() {
-                    Bound::Included(x) => *x as i64,
-                    Bound::Excluded(x) => x.saturating_add(1) as i64,
-                    Bound::Unbounded => 0,
-                },
-                match range.end_bound() {
-                    Bound::Included(x) => *x as i64,
-                    Bound::Excluded(x) => x.saturating_sub(1) as i64,
-                    Bound::Unbounded => -1,
-                },
-                CloudFilters::CF_HYDRATE_FLAG_NONE,
-                ptr::null_mut(),
-            )
-        }
-    }
-
+pub trait FileExt: AsRawHandle + Sealed {
     /// Dehydrates a placeholder file.
     fn dehydrate<T: RangeBounds<u64>>(&self, range: T) -> core::Result<()> {
         dehydrate(self.as_raw_handle(), range, false)
@@ -62,66 +34,6 @@ pub trait FileExt: AsRawHandle {
     /// is called on behalf of a logged-in user.
     fn background_dehydrate<T: RangeBounds<u64>>(&self, range: T) -> core::Result<()> {
         dehydrate(self.as_raw_handle(), range, true)
-    }
-
-    /// Reads raw data in a placeholder file without invoking the [SyncFilter][crate::SyncFilter].
-    fn read_raw(&self, read_type: ReadType, offset: u64, buffer: &mut [u8]) -> core::Result<u32> {
-        // TODO: buffer length must be u32 max
-        let mut length = 0;
-        unsafe {
-            CfGetPlaceholderRangeInfo(
-                HANDLE(self.as_raw_handle() as isize),
-                read_type.into(),
-                offset as i64,
-                buffer.len() as i64,
-                buffer as *mut _ as *mut _,
-                buffer.len() as u32,
-                &mut length as *mut _,
-            )
-        }
-        .map(|_| length)
-    }
-
-    /// Gets the current state of the placeholder.
-    // TODO: test to ensure this works. I feel like returning an option here is a little odd in the
-    // case of a non parsable state.
-    fn placeholder_state(&self) -> core::Result<Option<PlaceholderState>> {
-        let mut info = MaybeUninit::<FILE_ATTRIBUTE_TAG_INFO>::zeroed();
-        unsafe {
-            GetFileInformationByHandleEx(
-                HANDLE(self.as_raw_handle() as isize),
-                FileSystem::FileAttributeTagInfo,
-                info.as_mut_ptr() as *mut _,
-                mem::size_of::<FILE_ATTRIBUTE_TAG_INFO>() as u32,
-            )
-            .ok()?;
-
-            PlaceholderState::try_from_win32(CfGetPlaceholderStateFromFileInfo(
-                &info.assume_init() as *const _ as *const _,
-                FileSystem::FileAttributeTagInfo,
-            ))
-        }
-    }
-
-    /// Marks a placeholder as synced.
-    ///
-    /// If the passed [USN][crate::Usn] is outdated, the call will fail.
-    // TODO: must have write access
-    fn mark_sync(&self, usn: Usn) -> core::Result<Usn> {
-        mark_sync_state(self.as_raw_handle(), true, usn)
-    }
-
-    /// Marks a placeholder as not in sync.
-    ///
-    /// If the passed [USN][crate::Usn] is outdated, the call will fail.
-    // TODO: must have write access
-    fn mark_unsync(&self, usn: Usn) -> core::Result<Usn> {
-        mark_sync_state(self.as_raw_handle(), false, usn)
-    }
-
-    /// Returns whether or not the handle is a valid placeholder.
-    fn is_placeholder(&self) -> core::Result<bool> {
-        self.placeholder_state().map(|state| state.is_some())
     }
 
     /// Gets various characteristics of the sync root.
@@ -162,25 +74,6 @@ pub trait FileExt: AsRawHandle {
     }
 }
 
-fn mark_sync_state(handle: RawHandle, sync: bool, usn: Usn) -> core::Result<Usn> {
-    // TODO: docs say the usn NEEDS to be a null pointer? Why? Is it not supported?
-    // https://docs.microsoft.com/en-us/windows/win32/api/cfapi/nf-cfapi-cfsetinsyncstate
-    let mut usn = usn as i64;
-    unsafe {
-        CfSetInSyncState(
-            HANDLE(handle as isize),
-            if sync {
-                CloudFilters::CF_IN_SYNC_STATE_IN_SYNC
-            } else {
-                CloudFilters::CF_IN_SYNC_STATE_NOT_IN_SYNC
-            },
-            CloudFilters::CF_SET_IN_SYNC_FLAG_NONE,
-            &mut usn as *mut _,
-        )
-        .map(|_| usn as u64)
-    }
-}
-
 // TODO: is `CfDehydratePlaceholder` deprecated?
 // https://docs.microsoft.com/en-us/answers/questions/723805/what-is-the-behavior-of-file-ranges-in-different-p.html
 fn dehydrate<T: RangeBounds<u64>>(
@@ -214,26 +107,7 @@ fn dehydrate<T: RangeBounds<u64>>(
 
 impl FileExt for File {}
 
-/// The type of data to read from a placeholder.
-#[derive(Debug, Copy, Clone)]
-pub enum ReadType {
-    /// Any data that is saved to the disk.
-    Saved,
-    /// Data that has been synced to the cloud.
-    Validated,
-    /// Data that has not synced to the cloud.
-    Modified,
-}
-
-impl From<ReadType> for CF_PLACEHOLDER_RANGE_INFO_CLASS {
-    fn from(read_type: ReadType) -> Self {
-        match read_type {
-            ReadType::Saved => CloudFilters::CF_PLACEHOLDER_RANGE_INFO_ONDISK,
-            ReadType::Validated => CloudFilters::CF_PLACEHOLDER_RANGE_INFO_VALIDATED,
-            ReadType::Modified => CloudFilters::CF_PLACEHOLDER_RANGE_INFO_MODIFIED,
-        }
-    }
-}
+impl Sealed for File {}
 
 /// Information about a sync root.
 #[derive(Debug)]
@@ -357,35 +231,6 @@ impl From<ProviderStatus> for CF_SYNC_PROVIDER_STATUS {
             // ProviderStatus::ClearFlags => CloudFilters::CF_PROVIDER_STATUS_CLEAR_FLAGS,
             ProviderStatus::Terminated => CloudFilters::CF_PROVIDER_STATUS_TERMINATED,
             ProviderStatus::Error => CloudFilters::CF_PROVIDER_STATUS_ERROR,
-        }
-    }
-}
-
-// TODO: I don't think this is an enum
-#[derive(Debug, Clone, Copy)]
-pub enum PlaceholderState {
-    Placeholder,
-    SyncRoot,
-    EssentialPropPresent,
-    InSync,
-    StatePartial,
-    PartiallyOnDisk,
-}
-
-impl PlaceholderState {
-    fn try_from_win32(value: CF_PLACEHOLDER_STATE) -> core::Result<Option<PlaceholderState>> {
-        match value {
-            CloudFilters::CF_PLACEHOLDER_STATE_NO_STATES => Ok(None),
-            CloudFilters::CF_PLACEHOLDER_STATE_PLACEHOLDER => Ok(Some(Self::Placeholder)),
-            CloudFilters::CF_PLACEHOLDER_STATE_SYNC_ROOT => Ok(Some(Self::SyncRoot)),
-            CloudFilters::CF_PLACEHOLDER_STATE_ESSENTIAL_PROP_PRESENT => {
-                Ok(Some(Self::EssentialPropPresent))
-            }
-            CloudFilters::CF_PLACEHOLDER_STATE_IN_SYNC => Ok(Some(Self::InSync)),
-            CloudFilters::CF_PLACEHOLDER_STATE_PARTIAL => Ok(Some(Self::StatePartial)),
-            CloudFilters::CF_PLACEHOLDER_STATE_PARTIALLY_ON_DISK => Ok(Some(Self::PartiallyOnDisk)),
-            CloudFilters::CF_PLACEHOLDER_STATE_INVALID => Err(core::Error::from_win32()),
-            _ => unreachable!(),
         }
     }
 }
