@@ -48,7 +48,7 @@ impl<'a> Registration<'a> {
     pub fn from_sync_root_id(sync_root_id: &'a SyncRootId) -> Self {
         Self {
             sync_root_id,
-            display_name: &sync_root_id.as_u16_str(),
+            display_name: sync_root_id.as_u16_str(),
             recycle_bin_uri: None,
             show_siblings_as_group: false,
             allow_pinning: false,

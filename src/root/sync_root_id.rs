@@ -50,11 +50,10 @@ impl SyncRootIdBuilder {
             provider_name.len()
         );
         assert!(
-            provider_name
+            !provider_name
                 .as_slice()
                 .iter()
-                .find(|c| **c == SyncRootId::SEPARATOR)
-                .is_none(),
+                .any(|c| *c == SyncRootId::SEPARATOR),
             "provider name must not contain exclamation points"
         );
 
