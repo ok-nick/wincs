@@ -86,7 +86,7 @@ impl Drop for OwnedPlaceholderHandle {
         match self.handle_type {
             PlaceholderHandleType::CfApi => unsafe { CfCloseHandle(self.handle) },
             PlaceholderHandleType::Win32 => unsafe {
-                CloseHandle(self.handle);
+                _ = CloseHandle(self.handle);
             },
         }
     }
@@ -642,8 +642,7 @@ impl Placeholder {
                     false => CloudFilters::CF_IN_SYNC_STATE_NOT_IN_SYNC,
                 },
                 CloudFilters::CF_SET_IN_SYNC_FLAG_NONE,
-                usn.into()
-                    .map_or(ptr::null_mut(), |x| ptr::read(x) as *mut _),
+                usn.into().map(|x| ptr::read(x) as *mut _),
             )
         }?;
 
@@ -656,7 +655,7 @@ impl Placeholder {
     /// [CfSetPinState](https://learn.microsoft.com/en-us/windows/win32/api/cfapi/nf-cfapi-cfsetpinstate),
     /// [What does "Pinned" Mean?](https://www.userfilesystem.com/programming/faq/#nav_howdoesthealwayskeeponthisdevicemenuworks)
     pub fn mark_pin(&mut self, state: PinState, options: PinOptions) -> core::Result<&mut Self> {
-        unsafe { CfSetPinState(self.handle.handle, state.into(), options.0, ptr::null_mut()) }?;
+        unsafe { CfSetPinState(self.handle.handle, state.into(), options.0, None) }?;
         Ok(self)
     }
 
@@ -674,15 +673,11 @@ impl Placeholder {
         unsafe {
             CfConvertToPlaceholder(
                 self.handle.handle,
-                match options.blob.is_empty() {
-                    true => ptr::null(),
-                    false => options.blob.as_ptr() as *const _,
-                },
+                (!options.blob.is_empty()).then_some(options.blob.as_ptr() as *const _),
                 options.blob.len() as _,
                 options.flags,
-                usn.into()
-                    .map_or(ptr::null_mut(), |x| ptr::read(x) as *mut _),
-                ptr::null_mut(),
+                usn.into().map(|x| ptr::read(x) as *mut _),
+                None,
             )
         }?;
 
@@ -703,7 +698,7 @@ impl Placeholder {
                 CloudFilters::CF_PLACEHOLDER_INFO_STANDARD,
                 data.as_mut_ptr() as *mut _,
                 data.len() as u32,
-                ptr::null_mut(),
+                None,
             )
         };
 
@@ -716,7 +711,7 @@ impl Placeholder {
                 .1[0] as *const _,
                 data,
             })),
-            Err(e) if e.win32_error() == Some(ERROR_NOT_A_CLOUD_FILE) => Ok(None),
+            Err(e) if e.code() == ERROR_NOT_A_CLOUD_FILE.to_hresult() => Ok(None),
             Err(e) => Err(e),
         }
     }
@@ -732,21 +727,13 @@ impl Placeholder {
         unsafe {
             CfUpdatePlaceholder(
                 self.handle.handle,
-                options.metadata.map_or(ptr::null(), |x| &x.0 as *const _),
-                match options.blob.is_empty() {
-                    true => ptr::null(),
-                    false => options.blob.as_ptr() as *const _,
-                },
+                options.metadata.map(|x| &x.0 as *const _),
+                (!options.blob.is_empty()).then_some(options.blob.as_ptr() as *const _),
                 options.blob.len() as _,
-                match options.dehydrate_ranges.is_empty() {
-                    true => ptr::null(),
-                    false => options.dehydrate_ranges.as_ptr(),
-                },
-                options.dehydrate_ranges.len() as u32,
+                (options.dehydrate_ranges.is_empty()).then_some(&options.dehydrate_ranges),
                 options.flags,
-                usn.into()
-                    .map_or(ptr::null_mut(), |x| ptr::read(x) as *mut _),
-                ptr::null_mut(),
+                usn.into().map(|u| u as *mut _),
+                None,
             )
         }?;
 
@@ -769,7 +756,7 @@ impl Placeholder {
                 buffer.len() as i64,
                 buffer as *mut _ as *mut _,
                 buffer.len() as u32,
-                length.assume_init_mut(),
+                Some(length.as_mut_ptr()),
             )
             .map(|_| length.assume_init())
         }
@@ -854,7 +841,7 @@ impl Placeholder {
                     Bound::Unbounded => -1,
                 },
                 CloudFilters::CF_HYDRATE_FLAG_NONE,
-                ptr::null_mut(),
+                None,
             )
         }
     }
@@ -885,7 +872,7 @@ impl TryFrom<Placeholder> for File {
                 CfRevertPlaceholder(
                     placeholder.handle.handle,
                     CloudFilters::CF_REVERT_FLAG_NONE,
-                    ptr::null_mut(),
+                    None,
                 )
             }
             .map(|_| unsafe { File::from_raw_handle(mem::transmute(placeholder.handle.handle)) }),

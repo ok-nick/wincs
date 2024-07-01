@@ -11,14 +11,13 @@ use windows::{
     core::{self, HSTRING, PWSTR},
     Storage::Provider::{StorageProviderSyncRootInfo, StorageProviderSyncRootManager},
     Win32::{
-        Foundation::{self, GetLastError, HANDLE},
+        Foundation::{self, LocalFree, ERROR_INSUFFICIENT_BUFFER, HANDLE, HLOCAL},
         Security::{self, Authorization::ConvertSidToStringSidW, GetTokenInformation, TOKEN_USER},
         Storage::CloudFilters,
-        System::Memory::LocalFree,
     },
 };
 
-use crate::ext::PathExt;
+use crate::{ext::PathExt, utility::ToHString};
 
 /// Returns a list of active sync roots.
 pub fn active_roots() -> core::Result<Vec<StorageProviderSyncRootInfo>> {
@@ -90,14 +89,15 @@ impl SyncRootIdBuilder {
 
     /// Constructs a [SyncRootId] from the builder.
     pub fn build(self) -> SyncRootId {
-        SyncRootId(HSTRING::from_wide(
-            &[
+        SyncRootId(
+            [
                 self.provider_name.as_slice(),
                 self.user_security_id.0.as_slice(),
                 self.account_name.as_slice(),
             ]
-            .join(&SyncRootId::SEPARATOR),
-        ))
+            .join(&SyncRootId::SEPARATOR)
+            .to_hstring(),
+        )
     }
 }
 
@@ -128,7 +128,7 @@ impl SyncRootId {
         Ok(
             match StorageProviderSyncRootManager::GetSyncRootInformationForId(&self.0) {
                 Ok(_) => true,
-                Err(err) => err.win32_error() != Some(Foundation::ERROR_NOT_FOUND),
+                Err(err) => err.code() != Foundation::ERROR_NOT_FOUND.to_hresult(),
             },
         )
     }
@@ -215,32 +215,31 @@ impl SecurityId {
             let mut token = MaybeUninit::<TOKEN_USER>::uninit();
 
             // get the token size
-            if !GetTokenInformation(
+            if let Err(e) = GetTokenInformation(
                 Self::CURRENT_THREAD_EFFECTIVE_TOKEN,
                 Security::TokenUser,
-                ptr::null_mut(),
+                None,
                 0,
                 &mut token_size,
-            )
-            .as_bool()
-                && GetLastError() == Foundation::ERROR_INSUFFICIENT_BUFFER
-            {
+            ) {
+                if e.code() != ERROR_INSUFFICIENT_BUFFER.to_hresult() {
+                    Err(e)?;
+                }
                 GetTokenInformation(
                     Self::CURRENT_THREAD_EFFECTIVE_TOKEN,
                     Security::TokenUser,
-                    &mut token as *mut _ as *mut _,
+                    Some(&mut token as *mut _ as *mut _),
                     token_size,
                     &mut token_size,
-                )
-                .ok()?;
+                )?;
             }
 
             let token = token.assume_init();
             let mut sid = PWSTR(ptr::null_mut());
-            ConvertSidToStringSidW(token.User.Sid, &mut sid as *mut _).ok()?;
+            ConvertSidToStringSidW(token.User.Sid, &mut sid as *mut _)?;
 
             let string_sid = U16CStr::from_ptr_str(sid.0).to_os_string();
-            LocalFree(sid.0 as isize);
+            _ = LocalFree(HLOCAL(sid.0 as *mut _));
 
             Ok(SecurityId::new(string_sid))
         }

@@ -9,4 +9,4 @@
 /// instance, [FileExt::update][crate::ext::FileExt::update] will not apply the specified changes
 /// unless if the passed USN matches the most recent USN of the file. This avoids applying changes
 /// that may be out of date.
-pub type Usn = u64;
+pub type Usn = i64;

@@ -3,7 +3,7 @@ use std::{ffi::OsString, path::PathBuf, slice};
 use widestring::{u16cstr, U16CStr};
 use windows::Win32::Storage::CloudFilters::{CF_CALLBACK_INFO, CF_PROCESS_INFO};
 
-pub type RawConnectionKey = isize;
+pub type RawConnectionKey = i64;
 pub type RawTransferKey = i64;
 
 /// A struct containing various information for the current file operation.

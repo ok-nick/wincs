@@ -3,7 +3,6 @@ use std::{
     mem,
     ops::{Bound, RangeBounds},
     os::windows::{io::AsRawHandle, prelude::RawHandle},
-    ptr,
 };
 
 use widestring::U16CStr;
@@ -53,7 +52,7 @@ pub trait FileExt: AsRawHandle + Sealed {
                 CloudFilters::CF_SYNC_ROOT_INFO_STANDARD,
                 data.as_mut_ptr() as *mut _,
                 data.len() as u32,
-                ptr::null_mut(),
+                None,
             )?;
         }
 
@@ -100,7 +99,7 @@ fn dehydrate<T: RangeBounds<u64>>(
             } else {
                 CloudFilters::CF_DEHYDRATE_FLAG_BACKGROUND
             },
-            ptr::null_mut(),
+            None,
         )
     }
 }

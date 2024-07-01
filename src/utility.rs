@@ -11,8 +11,12 @@ where
     Self: AsRef<[u16]>,
 {
     /// Converts a 16-bit buffer to a Windows reference-counted [HSTRING][windows::core::HSTRING].
+    ///
+    /// # Panics
+    ///
+    /// Panics if [HeapAlloc](https://docs.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapalloc) fails.
     fn to_hstring(&self) -> HSTRING {
-        HSTRING::from_wide(self.as_ref())
+        HSTRING::from_wide(self.as_ref()).unwrap()
     }
 }
 

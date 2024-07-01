@@ -4,7 +4,6 @@ use std::{
     mem::{self, MaybeUninit},
     os::windows::{fs::OpenOptionsExt, io::AsRawHandle},
     path::{Path, PathBuf},
-    ptr,
     sync::{
         mpsc::{self, Sender, TryRecvError},
         Arc, Weak,
@@ -13,11 +12,11 @@ use std::{
     time::Duration,
 };
 
-use widestring::U16Str;
+use widestring::{u16cstr, U16CString, U16Str};
 use windows::{
-    core,
+    core::{self, PCWSTR},
     Win32::{
-        Foundation::{ERROR_IO_INCOMPLETE, HANDLE},
+        Foundation::{ERROR_IO_INCOMPLETE, HANDLE, WIN32_ERROR},
         Storage::{
             CloudFilters::{self, CfConnectSyncRoot, CF_CONNECT_FLAGS},
             FileSystem::{
@@ -27,7 +26,7 @@ use windows::{
         },
         System::{
             Com::{self, CoCreateInstance},
-            Search::{self, ISearchCatalogManager, ISearchManager},
+            Search::{self, ISearchManager},
             IO::{CancelIoEx, GetOverlappedResult},
         },
     },
@@ -72,11 +71,15 @@ impl Session {
         let callbacks = filter::callbacks::<T>();
         let key = unsafe {
             CfConnectSyncRoot(
-                path.as_ref().as_os_str(),
+                PCWSTR(
+                    U16CString::from_os_str(path.as_ref())
+                        .expect("not contains nul")
+                        .as_ptr(),
+                ),
                 callbacks.as_ptr(),
                 // create a weak arc so that it could be upgraded when it's being used and when the
                 // connection is closed, the filter could be freed
-                Weak::into_raw(Arc::downgrade(&filter)) as *const _,
+                Some(Weak::into_raw(Arc::downgrade(&filter)) as *const _),
                 // This is enabled by default to remove the Option requirement around various fields of the
                 // [Request][crate::Request] struct
                 self.0
@@ -112,13 +115,22 @@ fn index_path(path: &Path) -> core::Result<()> {
             Com::CLSCTX_SERVER,
         )?;
 
-        let catalog: ISearchCatalogManager = searcher.GetCatalog("SystemIndex")?;
+        let catalog = searcher.GetCatalog(PCWSTR(u16cstr!("SystemIndex").as_ptr()))?;
 
         let mut url = OsString::from("file:///");
         url.push(path);
 
         let crawler = catalog.GetCrawlScopeManager()?;
-        crawler.AddDefaultScopeRule(url, true, Search::FF_INDEXCOMPLEXURLS.0 as u32)?;
+        crawler.AddDefaultScopeRule(
+            PCWSTR(
+                U16CString::from_os_str(url)
+                    .expect("not contains nul")
+                    .as_ptr(),
+            ),
+            true,
+            Search::FF_INDEXCOMPLEXURLS.0 as u32,
+        )?;
+
         crawler.SaveAll()
     }
 }
@@ -148,38 +160,35 @@ fn spawn_root_watcher<T: SyncFilter + 'static>(
                     CHANGE_BUF_SIZE as _,
                     true,
                     FILE_NOTIFY_CHANGE_ATTRIBUTES,
-                    ptr::null_mut(),
-                    overlapped.as_mut_ptr(),
+                    None,
+                    Some(overlapped.as_mut_ptr()),
                     None,
                 )
             }
-            .ok()
             .expect("read directory changes");
 
             loop {
-                if unsafe {
-                    !GetOverlappedResult(
+                if let Err(e) = unsafe {
+                    GetOverlappedResult(
                         HANDLE(sync_root.as_raw_handle() as _),
-                        overlapped.as_mut_ptr(),
+                        overlapped.as_ptr(),
                         transferred.as_mut_ptr(),
                         false,
                     )
-                }
-                .into()
-                {
-                    let win32_err = core::Error::from_win32().win32_error();
-                    if win32_err != Some(ERROR_IO_INCOMPLETE) {
+                } {
+                    if e.code() != ERROR_IO_INCOMPLETE.to_hresult() {
                         panic!(
-                            "get overlapped result: {win32_err:?}, expected: {ERROR_IO_INCOMPLETE:?}"
+                            "get overlapped result: {:?}, expected: {ERROR_IO_INCOMPLETE:?}",
+                            WIN32_ERROR::from_error(&e),
                         );
                     }
 
                     // cancel by user
                     if !matches!(rx.try_recv(), Err(TryRecvError::Empty)) {
-                        unsafe {
+                        _ = unsafe {
                             CancelIoEx(
                                 HANDLE(sync_root.as_raw_handle() as _),
-                                overlapped.as_mut_ptr(),
+                                Some(overlapped.as_ptr()),
                             )
                         };
                         return;

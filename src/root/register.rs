@@ -15,9 +15,8 @@ use windows::{
         Streams::DataWriter,
     },
     Win32::Storage::CloudFilters::{
-        self, CF_HYDRATION_POLICY_MODIFIER_USHORT, CF_HYDRATION_POLICY_PRIMARY,
-        CF_HYDRATION_POLICY_PRIMARY_USHORT, CF_INSYNC_POLICY, CF_POPULATION_POLICY_PRIMARY,
-        CF_POPULATION_POLICY_PRIMARY_USHORT,
+        self, CF_HYDRATION_POLICY_MODIFIER, CF_HYDRATION_POLICY_PRIMARY, CF_INSYNC_POLICY,
+        CF_POPULATION_POLICY_PRIMARY,
     },
 };
 
@@ -158,10 +157,10 @@ impl<'a> Registration<'a> {
         info.SetHydrationPolicyModifier(self.hydration_policy.0)?;
         info.SetPopulationPolicy(self.population_type.into())?;
         info.SetInSyncPolicy(self.supported_attributes.0)?;
-        info.SetDisplayNameResource(self.display_name.to_hstring())?;
-        info.SetIconResource(self.icon.to_hstring())?;
+        info.SetDisplayNameResource(&self.display_name.to_hstring())?;
+        info.SetIconResource(&self.icon.to_hstring())?;
         info.SetPath(
-            StorageFolder::GetFolderFromPathAsync(
+            &StorageFolder::GetFolderFromPathAsync(
                 &U16String::from_os_str(path.as_ref().as_os_str()).to_hstring(),
             )?
             .get()?,
@@ -177,20 +176,20 @@ impl<'a> Registration<'a> {
             info.SetProviderId(provider_id)?;
         }
         if let Some(version) = &self.version {
-            info.SetVersion(version.to_hstring())?;
+            info.SetVersion(&version.to_hstring())?;
         }
 
         if let Some(uri) = &self.recycle_bin_uri {
-            info.SetRecycleBinUri(Uri::CreateUri(uri.to_hstring())?)?;
+            info.SetRecycleBinUri(&Uri::CreateUri(&uri.to_hstring())?)?;
         }
         if let Some(blob) = &self.blob {
             // TODO: implement IBuffer interface for slices to avoid a copy
             let writer = DataWriter::new()?;
             writer.WriteBytes(blob)?;
-            info.SetContext(writer.DetachBuffer()?)?;
+            info.SetContext(&writer.DetachBuffer()?)?;
         }
 
-        StorageProviderSyncRootManager::Register(info)
+        StorageProviderSyncRootManager::Register(&info)
     }
 }
 
@@ -228,9 +227,9 @@ impl From<HydrationType> for StorageProviderHydrationPolicy {
     }
 }
 
-impl From<CF_HYDRATION_POLICY_PRIMARY_USHORT> for HydrationType {
-    fn from(primary: CF_HYDRATION_POLICY_PRIMARY_USHORT) -> Self {
-        match CF_HYDRATION_POLICY_PRIMARY(primary.us) {
+impl From<CF_HYDRATION_POLICY_PRIMARY> for HydrationType {
+    fn from(primary: CF_HYDRATION_POLICY_PRIMARY) -> Self {
+        match primary {
             CloudFilters::CF_HYDRATION_POLICY_PARTIAL => HydrationType::Partial,
             CloudFilters::CF_HYDRATION_POLICY_PROGRESSIVE => HydrationType::Progressive,
             CloudFilters::CF_HYDRATION_POLICY_FULL => HydrationType::Full,
@@ -278,9 +277,9 @@ impl Default for HydrationPolicy {
     }
 }
 
-impl From<CF_HYDRATION_POLICY_MODIFIER_USHORT> for HydrationPolicy {
-    fn from(primary: CF_HYDRATION_POLICY_MODIFIER_USHORT) -> Self {
-        Self(StorageProviderHydrationPolicyModifier(primary.us as u32))
+impl From<CF_HYDRATION_POLICY_MODIFIER> for HydrationPolicy {
+    fn from(primary: CF_HYDRATION_POLICY_MODIFIER) -> Self {
+        Self(StorageProviderHydrationPolicyModifier(primary.0 as u32))
     }
 }
 
@@ -299,9 +298,9 @@ impl From<PopulationType> for StorageProviderPopulationPolicy {
     }
 }
 
-impl From<CF_POPULATION_POLICY_PRIMARY_USHORT> for PopulationType {
-    fn from(primary: CF_POPULATION_POLICY_PRIMARY_USHORT) -> Self {
-        match CF_POPULATION_POLICY_PRIMARY(primary.us) {
+impl From<CF_POPULATION_POLICY_PRIMARY> for PopulationType {
+    fn from(primary: CF_POPULATION_POLICY_PRIMARY) -> Self {
+        match primary {
             CloudFilters::CF_POPULATION_POLICY_FULL => PopulationType::Full,
             CloudFilters::CF_POPULATION_POLICY_ALWAYS_FULL => PopulationType::AlwaysFull,
             _ => unreachable!(),
