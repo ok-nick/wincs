@@ -48,7 +48,7 @@ impl<'a> Registration<'a> {
     pub fn from_sync_root_id(sync_root_id: &'a SyncRootId) -> Self {
         Self {
             sync_root_id,
-            display_name: sync_root_id.as_u16str(),
+            display_name: &sync_root_id.as_u16_str(),
             recycle_bin_uri: None,
             show_siblings_as_group: false,
             allow_pinning: false,
@@ -194,7 +194,7 @@ impl<'a> Registration<'a> {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProtectionMode {
     Personal,
     Unknown,
@@ -209,7 +209,7 @@ impl From<ProtectionMode> for StorageProviderProtectionMode {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HydrationType {
     Partial,
     Progressive,
@@ -359,14 +359,6 @@ impl SupportedAttributes {
 
     pub fn directory_last_write_time(mut self) -> Self {
         self.0 |= StorageProviderInSyncPolicy::DirectoryLastWriteTime;
-        self
-    }
-
-    // TODO: I'm not sure how this differs from the default policy,
-    // https://docs.microsoft.com/en-us/answers/questions/760677/how-does-cf-insync-policy-none-differ-from-cf-insy.html
-
-    pub fn none(mut self) -> Self {
-        self.0 |= StorageProviderInSyncPolicy::PreserveInsyncForSyncEngine;
         self
     }
 }

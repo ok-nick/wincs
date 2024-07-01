@@ -10,14 +10,9 @@ use crate::{filter::Callbacks, request::RawConnectionKey};
 
 /// A handle to the current session for a given sync root.
 ///
-/// By calling [Connection::disconnect][crate::Connection::disconnect], the session will terminate
-/// and no more file operations will be able to be performed within the sync root. Note that this
+/// [Connection] will disconnect when dropped. Note that this
 /// does **NOT** mean the sync root will be unregistered. To do so, call
-/// [SyncRootId::unregister][crate::SyncRootId::unregister].
-///
-/// [Connection::disconnect][crate::Connection::disconnect] is called implicitly when the struct is
-/// dropped. To handle possible errors, be sure to call
-/// [Connection::disconnect][crate::Connection::disconnect] explicitly.
+/// [SyncRootId::unregister][crate::root::SyncRootId::unregister].
 #[derive(Debug)]
 pub struct Connection<T> {
     connection_key: RawConnectionKey,
@@ -53,7 +48,7 @@ impl<T> Connection<T> {
         self.connection_key
     }
 
-    /// A reference to the inner [SyncFilter][crate::SyncFilter] struct.
+    /// A reference to the inner [SyncFilter][crate::filter::SyncFilter] struct.
     pub fn filter(&self) -> &T {
         &self.filter
     }

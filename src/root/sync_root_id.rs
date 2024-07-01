@@ -1,9 +1,9 @@
-use std::{mem::MaybeUninit, path::Path, ptr};
+use std::{ffi::OsString, mem::MaybeUninit, os::windows::ffi::OsStringExt, path::Path, ptr};
 
 use widestring::{U16CString, U16Str, U16String};
 use windows::{
     core::{self, HSTRING, PWSTR},
-    Storage::Provider::StorageProviderSyncRootManager,
+    Storage::Provider::{StorageProviderSyncRootInfo, StorageProviderSyncRootManager},
     Win32::{
         Foundation::{self, GetLastError, HANDLE},
         Security::{self, Authorization::ConvertSidToStringSidW, GetTokenInformation, TOKEN_USER},
@@ -15,15 +15,13 @@ use windows::{
 use crate::ext::PathExt;
 
 /// Returns a list of active sync roots.
-pub fn active_roots() {
-    // GetCurrentSyncRoots()
-    todo!()
+pub fn active_roots() -> core::Result<Vec<StorageProviderSyncRootInfo>> {
+    StorageProviderSyncRootManager::GetCurrentSyncRoots().map(|list| list.into_iter().collect())
 }
 
 /// Returns whether or not the Cloud Filter API is supported (or at least the UWP part of it, for
 /// now).
 pub fn is_supported() -> core::Result<bool> {
-    // TODO: Check current windows version to see if this function is supported before calling it
     StorageProviderSyncRootManager::IsSupported()
 }
 
@@ -38,14 +36,26 @@ pub struct SyncRootIdBuilder {
 impl SyncRootIdBuilder {
     /// Create a new builder with the given provider name.
     ///
-    /// The provider name MUST NOT contain exclamation points and it must be within [255](https://docs.microsoft.com/en-us/windows/win32/api/cfapi/ns-cfapi-cf_sync_root_provider_info#remarks) characters.
+    /// The provider name MUST NOT contain exclamation points and it must be within
+    /// [255](https://docs.microsoft.com/en-us/windows/win32/api/cfapi/ns-cfapi-cf_sync_root_provider_info#remarks) characters.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the provider name is longer than 255 characters or contains exclamation points.
     pub fn new(provider_name: U16String) -> Self {
-        // TODO: assert that is doesn't have exclamation points
         assert!(
             provider_name.len() <= CloudFilters::CF_MAX_PROVIDER_NAME_LENGTH as usize,
             "provider name must not exceed {} characters, got {} characters",
             CloudFilters::CF_MAX_PROVIDER_NAME_LENGTH,
             provider_name.len()
+        );
+        assert!(
+            provider_name
+                .as_slice()
+                .iter()
+                .find(|c| **c == SyncRootId::SEPARATOR)
+                .is_none(),
+            "provider name must not contain exclamation points"
         );
 
         Self {
@@ -56,7 +66,7 @@ impl SyncRootIdBuilder {
     }
 
     /// The security id of the Windows user. Retrieve this value via the
-    /// [SecurityId][crate::SecurityId] struct.
+    /// [SecurityId] struct.
     ///
     /// By default, a sync root registered without a user security id will be installed globally.
     pub fn user_security_id(mut self, security_id: SecurityId) -> Self {
@@ -93,7 +103,7 @@ impl SyncRootIdBuilder {
 /// as specified
 /// [here](https://docs.microsoft.com/en-us/uwp/api/windows.storage.provider.storageprovidersyncrootinfo.id?view=winrt-22000#property-value).
 ///
-/// A [SyncRootId][crate::SyncRootId] stores an inner, reference counted [HSTRING][windows::core::HSTRING], making this struct cheap to clone.
+/// A [SyncRootId] stores an inner, reference counted [HSTRING][windows::core::HSTRING], making this struct cheap to clone.
 #[derive(Debug, Clone)]
 pub struct SyncRootId(HSTRING);
 
@@ -102,13 +112,13 @@ impl SyncRootId {
     // unicode exclamation point as told in the specification above
     const SEPARATOR: u16 = 0x21;
 
-    /// Creates a [SyncRootId][crate::SyncRootId] from the sync root at the given path.
+    /// Creates a [SyncRootId] from the sync root at the given path.
     pub fn from_path<P: AsRef<Path>>(path: P) -> core::Result<Self> {
         // if the id is coming from a sync root, then it must be valid
         Ok(Self(path.as_ref().sync_root_info()?.Id()?))
     }
 
-    /// Whether or not the [SyncRootId][crate::SyncRootId] has already been registered.
+    /// Whether or not the [SyncRootId] has already been registered.
     pub fn is_registered(&self) -> core::Result<bool> {
         Ok(
             match StorageProviderSyncRootManager::GetSyncRootInformationForId(&self.0) {
@@ -118,22 +128,32 @@ impl SyncRootId {
         )
     }
 
-    /// Unregisters the sync root at the current [SyncRootId][crate::SyncRootId] if it exists.
+    /// Returns the sync root information for the [SyncRootId].
+    pub fn sync_root_info(&self) -> core::Result<StorageProviderSyncRootInfo> {
+        StorageProviderSyncRootManager::GetSyncRootInformationForId(&self.0)
+    }
+
+    /// Unregisters the sync root at the current [SyncRootId] if it exists.
     pub fn unregister(&self) -> core::Result<()> {
         StorageProviderSyncRootManager::Unregister(&self.0)
     }
 
-    /// A reference to the [SyncRootId][crate::SyncRootId] as a 16 bit string.
-    pub fn as_u16str(&self) -> &U16Str {
+    /// A reference to the [SyncRootId] as a 16 bit string.
+    pub fn to_os_string(&self) -> OsString {
+        OsString::from_wide(self.0.as_wide())
+    }
+
+    /// A reference to the [SyncRootId] as a 16 bit string.
+    pub fn as_u16_str(&self) -> &U16Str {
         U16Str::from_slice(self.0.as_wide())
     }
 
-    /// A reference to the [SyncRootId][crate::SyncRootId] as an [HSTRING][windows::core::HSTRING] (its inner value).
+    /// A reference to the [SyncRootId] as an [HSTRING][windows::core::HSTRING] (its inner value).
     pub fn as_hstring(&self) -> &HSTRING {
         &self.0
     }
 
-    /// The three components of a [SyncRootId][crate::SyncRootId] as described by the specification.
+    /// The three components of a [SyncRootId] as described by the specification.
     ///
     /// The order goes as follows:
     /// `(provider-id, security-id, account-name)`
@@ -167,17 +187,18 @@ impl SecurityId {
     // https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getcurrentthreadeffectivetoken
     const CURRENT_THREAD_EFFECTIVE_TOKEN: HANDLE = HANDLE(-6);
 
-    /// Creates a new [SecurityId][crate::SecurityId] without any assertions.
-    pub fn new_unchecked(id: U16String) -> Self {
-        Self(id)
+    /// Creates a new [SecurityId] without any assertions.
+    pub fn new(id: OsString) -> Self {
+        Self(id.into())
     }
 
-    /// The [SecurityId][crate::SecurityId] for the logged in user.
+    /// The [SecurityId] for the logged in user.
     pub fn current_user() -> core::Result<Self> {
         unsafe {
             let mut token_size = 0;
             let mut token = MaybeUninit::<TOKEN_USER>::uninit();
 
+            // get the token size
             if !GetTokenInformation(
                 Self::CURRENT_THREAD_EFFECTIVE_TOKEN,
                 Security::TokenUser,
@@ -205,7 +226,7 @@ impl SecurityId {
             let string_sid = U16CString::from_ptr_str(sid.0).into_ustring();
             LocalFree(sid.0 as isize);
 
-            Ok(SecurityId::new_unchecked(string_sid))
+            Ok(SecurityId::new(string_sid.to_os_string()))
         }
     }
 }
