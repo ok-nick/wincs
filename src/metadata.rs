@@ -8,11 +8,12 @@ use windows::Win32::Storage::{
 
 use crate::sealed;
 
-/// The metadata for a [PlaceholderFile][crate::PlaceholderFile].
+/// The metadata for placeholder.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Metadata(pub(crate) CF_FS_METADATA);
 
 impl Metadata {
+    /// The default [Metadata] with `FILE_ATTRIBUTE_NORMAL` attribute.
     pub fn file() -> Self {
         Self(CF_FS_METADATA {
             BasicInfo: FILE_BASIC_INFO {
@@ -23,6 +24,7 @@ impl Metadata {
         })
     }
 
+    /// The default [Metadata] with `FILE_ATTRIBUTE_DIRECTORY` attribute.
     pub fn directory() -> Self {
         Self(CF_FS_METADATA {
             BasicInfo: FILE_BASIC_INFO {

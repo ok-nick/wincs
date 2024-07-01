@@ -10,7 +10,7 @@ use windows::Win32::Storage::CloudFilters::{
     CF_CALLBACK_PARAMETERS_0_9,
 };
 
-/// Information for the [SyncFilter::fetch_data][crate::SyncFilter::fetch_data] callback.
+/// Information for the [SyncFilter::fetch_data][crate::filter::SyncFilter::fetch_data] callback.
 pub struct FetchData(pub(crate) CF_CALLBACK_PARAMETERS_0_6);
 
 impl FetchData {
@@ -20,7 +20,7 @@ impl FetchData {
     }
 
     /// Whether or not the callback was called from an explicit hydration via
-    /// [FileExt::hydrate][crate::ext::FileExt::hydrate].
+    /// [Placeholder::hydrate][crate::placeholder::Placeholder::hydrate].
     pub fn explicit_hydration(&self) -> bool {
         (self.0.Flags & CloudFilters::CF_CALLBACK_FETCH_DATA_FLAG_EXPLICIT_HYDRATION).0 != 0
     }
@@ -64,13 +64,11 @@ impl Debug for FetchData {
     }
 }
 
-/// Information for the [SyncFilter::cancel_fetch_data][crate::SyncFilter::cancel_fetch_data] callback.
+/// Information for the [SyncFilter::cancel_fetch_data][crate::filter::SyncFilter::cancel_fetch_data] callback.
 pub struct CancelFetchData(pub(crate) CF_CALLBACK_PARAMETERS_0_0);
 
 impl CancelFetchData {
     /// Whether or not the callback failed as a result of the 60 second timeout.
-    ///
-    /// Read more [here][crate::Request::reset_timeout].
     pub fn timeout(&self) -> bool {
         (self.0.Flags & CloudFilters::CF_CALLBACK_CANCEL_FLAG_IO_TIMEOUT).0 != 0
     }
@@ -99,7 +97,7 @@ impl Debug for CancelFetchData {
     }
 }
 
-/// Information for the [SyncFilter::validate_data][crate::SyncFilter::validate_data] callback.
+/// Information for the [SyncFilter::validate_data][crate::filter::SyncFilter::validate_data] callback.
 pub struct ValidateData(pub(crate) CF_CALLBACK_PARAMETERS_0_11);
 
 impl ValidateData {
@@ -124,7 +122,7 @@ impl Debug for ValidateData {
     }
 }
 
-/// Information for the [SyncFilter::fetch_placeholders][crate::SyncFilter::fetch_placeholders]
+/// Information for the [SyncFilter::fetch_placeholders][crate::filter::SyncFilter::fetch_placeholders]
 /// callback.
 pub struct FetchPlaceholders(pub(crate) CF_CALLBACK_PARAMETERS_0_7);
 
@@ -306,12 +304,12 @@ impl Debug for Delete {
     }
 }
 
-/// Information for the [SyncFilter::deleted][crate::SyncFilter::deleted] callback.
+/// Information for the [SyncFilter::deleted][crate::filter::SyncFilter::deleted] callback.
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct Deleted(pub(crate) CF_CALLBACK_PARAMETERS_0_4);
 
-/// Information for the [SyncFilter::rename][crate::SyncFilter::rename] callback.
+/// Information for the [SyncFilter::rename][crate::filter::SyncFilter::rename] callback.
 pub struct Rename(pub(crate) CF_CALLBACK_PARAMETERS_0_10, pub(crate) OsString);
 
 impl Rename {
@@ -349,7 +347,7 @@ impl Debug for Rename {
     }
 }
 
-/// Information for the [SyncFilter::renamed][crate::SyncFilter::renamed] callback.
+/// Information for the [SyncFilter::renamed][crate::filter::SyncFilter::renamed] callback.
 pub struct Renamed(pub(crate) CF_CALLBACK_PARAMETERS_0_9, pub(crate) OsString);
 
 impl Renamed {
@@ -370,7 +368,7 @@ impl Debug for Renamed {
 }
 
 /// The reason a placeholder has been dehydrated.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DehydrationReason {
     /// The user manually dehydrated the placeholder.
     UserManually,

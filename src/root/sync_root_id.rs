@@ -1,6 +1,12 @@
-use std::{ffi::OsString, mem::MaybeUninit, os::windows::ffi::OsStringExt, path::Path, ptr};
+use std::{
+    ffi::OsString,
+    mem::MaybeUninit,
+    os::windows::ffi::{OsStrExt, OsStringExt},
+    path::Path,
+    ptr,
+};
 
-use widestring::{U16CString, U16Str, U16String};
+use widestring::{U16CStr, U16Str, U16String};
 use windows::{
     core::{self, HSTRING, PWSTR},
     Storage::Provider::{StorageProviderSyncRootInfo, StorageProviderSyncRootManager},
@@ -25,7 +31,7 @@ pub fn is_supported() -> core::Result<bool> {
     StorageProviderSyncRootManager::IsSupported()
 }
 
-/// A builder to construct a [SyncRootId][crate::SyncRootId].
+/// A builder to construct a [SyncRootId].
 #[derive(Debug, Clone)]
 pub struct SyncRootIdBuilder {
     provider_name: U16String,
@@ -82,7 +88,7 @@ impl SyncRootIdBuilder {
         self
     }
 
-    /// Constructs a [SyncRootId][crate::SyncRootId] from the builder.
+    /// Constructs a [SyncRootId] from the builder.
     pub fn build(self) -> SyncRootId {
         SyncRootId(HSTRING::from_wide(
             &[
@@ -137,7 +143,7 @@ impl SyncRootId {
         StorageProviderSyncRootManager::Unregister(&self.0)
     }
 
-    /// A reference to the [SyncRootId] as a 16 bit string.
+    /// Encodes the [SyncRootId] to an [OsString].
     pub fn to_os_string(&self) -> OsString {
         OsString::from_wide(self.0.as_wide())
     }
@@ -186,8 +192,19 @@ impl SecurityId {
     // https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getcurrentthreadeffectivetoken
     const CURRENT_THREAD_EFFECTIVE_TOKEN: HANDLE = HANDLE(-6);
 
-    /// Creates a new [SecurityId] without any assertions.
+    /// Creates a new [SecurityId] from [OsString].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the security id contains an exclamation point.
     pub fn new(id: OsString) -> Self {
+        assert!(
+            !id.as_os_str()
+                .encode_wide()
+                .any(|x| x == SyncRootId::SEPARATOR),
+            "security id cannot contain exclamation points"
+        );
+
         Self(id.into())
     }
 
@@ -222,10 +239,10 @@ impl SecurityId {
             let mut sid = PWSTR(ptr::null_mut());
             ConvertSidToStringSidW(token.User.Sid, &mut sid as *mut _).ok()?;
 
-            let string_sid = U16CString::from_ptr_str(sid.0).into_ustring();
+            let string_sid = U16CStr::from_ptr_str(sid.0).to_os_string();
             LocalFree(sid.0 as isize);
 
-            Ok(SecurityId::new(string_sid.to_os_string()))
+            Ok(SecurityId::new(string_sid))
         }
     }
 }

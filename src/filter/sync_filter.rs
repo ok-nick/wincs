@@ -8,7 +8,7 @@ use crate::{
 
 /// Core functions for implementing a Sync Engine.
 ///
-/// `Send` and `Sync` are required as the callback could be invoked from an arbitrary thread, [read
+/// [Send] and [Sync] are required as the callback could be invoked from an arbitrary thread, [read
 /// here](https://docs.microsoft.com/en-us/windows/win32/api/cfapi/ne-cfapi-cf_callback_type#remarks).
 pub trait SyncFilter: Send + Sync {
     /// A placeholder hydration has been requested. This means that the placeholder should be
@@ -103,7 +103,7 @@ pub trait SyncFilter: Send + Sync {
     /// However, it is up to **you** to approve this. Use the ticket to approve the
     /// request.
     ///
-    /// When the operation is completed, the [SyncFilter::renamed][crate::SyncFilter::renamed] callback will be called.
+    /// When the operation is completed, the [SyncFilter::renamed] callback will be called.
     fn rename(
         &self,
         _request: Request,

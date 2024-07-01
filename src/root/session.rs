@@ -48,19 +48,18 @@ impl Session {
         Self::default()
     }
 
-    // TODO: what specifically causes an implicit hydration?
     /// The [block_implicit_hydration][crate::Session::block_implicit_hydration] flag will prevent
     /// implicit placeholder hydrations from invoking
-    /// [SyncFilter::fetch_data][crate::SyncFilter::fetch_data]. This could occur when an
+    /// [SyncFilter::fetch_data][crate::filter::SyncFilter::fetch_data]. This could occur when an
     /// anti-virus is scanning file system activity on files within the sync root.
     ///
-    /// A call to the [FileExt::hydrate][crate::ext::FileExt::hydrate] trait will not be blocked by this flag.
+    /// A call to the [Placeholder::hydrate][crate::placeholder::Placeholder::hydrate] trait will not be blocked by this flag.
     pub fn block_implicit_hydration(mut self) -> Self {
         self.0 |= CloudFilters::CF_CONNECT_FLAG_BLOCK_SELF_IMPLICIT_HYDRATION;
         self
     }
 
-    /// Initiates a connection to the sync root with the given [SyncFilter][crate::SyncFilter].
+    /// Initiates a connection to the sync root with the given [SyncFilter].
     pub fn connect<P, T>(self, path: P, filter: T) -> core::Result<Connection<Arc<T>>>
     where
         P: AsRef<Path>,
