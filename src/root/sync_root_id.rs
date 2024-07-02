@@ -162,22 +162,21 @@ impl SyncRootId {
     ///
     /// The order goes as follows:
     /// `(provider-id, security-id, account-name)`
-    // TODO: This doesn't work properly, it forgets to include the account name
+    ///
+    /// # Panics
+    ///
+    /// Panics if the sync root id does not have exactly three components.
     pub fn to_components(&self) -> (&U16Str, &U16Str, &U16Str) {
         let mut components = Vec::with_capacity(3);
-        let mut bytes = self.0.as_wide();
+        components.extend(
+            self.0
+                .as_wide()
+                .split(|&byte| byte == Self::SEPARATOR)
+                .map(U16Str::from_slice),
+        );
 
-        for index in 0..2 {
-            match bytes.iter().position(|&byte| byte == Self::SEPARATOR) {
-                Some(position) => {
-                    components.insert(index, U16Str::from_slice(bytes));
-                    bytes = &bytes[(position + 1)..];
-                }
-                None => {
-                    // TODO: return a result instead of panic
-                    panic!("malformed sync root id, got {:?}", components)
-                }
-            }
+        if components.len() != 3 {
+            panic!("malformed sync root id, got {:?}", components)
         }
 
         (components[0], components[1], components[2])
