@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-wincs = { path = "../../" }
+cloud-filter = { path = "../../" }
 widestring = "1.0.2"
 ssh2 = "0.9.4"
 thiserror = "1.0.30"
