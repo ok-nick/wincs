@@ -1,6 +1,6 @@
 [package]
 name = "cloud-filter"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["ok-nick <nick.libraries@gmail.com>", "ho-229 <ho229v3666@gmail.com>"]
 edition = "2021"
 description = "A safe and idiomatic wrapper around the Windows Cloud Filter API"
