@@ -204,7 +204,7 @@ fn spawn_root_watcher<T: SyncFilter + 'static>(
 
                 let mut changes = Vec::with_capacity(8);
                 let mut entry = changes_buf.as_ptr() as *const FILE_NOTIFY_INFORMATION;
-                while !entry.is_null() {
+                loop {
                     let relative = unsafe {
                         U16Str::from_ptr(
                             &(*entry).FileName as *const _,
@@ -213,7 +213,11 @@ fn spawn_root_watcher<T: SyncFilter + 'static>(
                     };
 
                     changes.push(path.join(relative.to_os_string()));
-                    entry = (unsafe { *entry }).NextEntryOffset as *const _;
+
+                    if unsafe { *entry }.NextEntryOffset == 0 {
+                        break;
+                    }
+                    entry = unsafe { entry.byte_add((*entry).NextEntryOffset as _) };
                 }
 
                 filter.state_changed(changes);
