@@ -686,10 +686,47 @@ impl Placeholder {
 
     /// Gets various characteristics of the placeholder.
     ///
+    /// Returns [None] if the handle not points to a placeholder.
+    ///
+    /// If the placeholder blob size is known, use [fixed_size_info](Self::fixed_size_info) instead.
+    pub fn info(&self) -> core::Result<Option<PlaceholderInfo>> {
+        let mut info_size = 0;
+        let mut data = vec![0u8; mem::size_of::<CF_PLACEHOLDER_STANDARD_INFO>() + 4096];
+        let r = unsafe {
+            CfGetPlaceholderInfo(
+                self.handle.handle,
+                CloudFilters::CF_PLACEHOLDER_INFO_STANDARD,
+                data.as_mut_ptr() as *mut _,
+                data.len() as _,
+                Some(&mut info_size),
+            )
+        };
+
+        match r {
+            Ok(()) => {
+                unsafe { data.set_len(info_size as _) };
+                data.shrink_to_fit();
+
+                Ok(Some(PlaceholderInfo {
+                    info: &unsafe {
+                        data[..=mem::size_of::<CF_PLACEHOLDER_STANDARD_INFO>()]
+                            .align_to::<CF_PLACEHOLDER_STANDARD_INFO>()
+                    }
+                    .1[0] as *const _,
+                    data,
+                }))
+            }
+            Err(e) if e.code() == ERROR_NOT_A_CLOUD_FILE.to_hresult() => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Gets various characteristics of the placeholder.
+    ///
     /// If the `blob_size` not matches the actual size of the blob,
     /// the call will returns `HRESULT_FROM_WIN32(ERROR_MORE_DATA)`.
-    /// Returns `None` if the handle not points to a placeholder.
-    pub fn info(&self, blob_size: usize) -> core::Result<Option<PlaceholderInfo>> {
+    /// Returns [None] if the handle not points to a placeholder.
+    pub fn fixed_size_info(&self, blob_size: usize) -> core::Result<Option<PlaceholderInfo>> {
         let mut data = vec![0; mem::size_of::<CF_PLACEHOLDER_STANDARD_INFO>() + blob_size];
 
         let r = unsafe {
