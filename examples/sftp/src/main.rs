@@ -15,13 +15,12 @@ use cloud_filter::{
     placeholder::{ConvertOptions, Placeholder},
     placeholder_file::PlaceholderFile,
     request::Request,
-    root::{HydrationType, PopulationType, Registration, SecurityId, Session, SyncRootIdBuilder},
+    root::{HydrationType, PopulationType, SecurityId, Session, SyncRootIdBuilder, SyncRootInfo},
     utility::{FileTime, WriteAt},
 };
 use rkyv::{Archive, Deserialize, Serialize};
 use ssh2::Sftp;
 use thiserror::Error;
-use widestring::{u16str, U16String};
 
 // max should be 65536, this is done both in term-scp and sshfs because it's the
 // max packet size for a tcp connection
@@ -51,26 +50,29 @@ fn main() {
 
     let sftp = session.sftp().unwrap();
 
-    let sync_root_id = SyncRootIdBuilder::new(U16String::from_str(PROVIDER_NAME))
+    let sync_root_id = SyncRootIdBuilder::new(PROVIDER_NAME)
         .user_security_id(SecurityId::current_user().unwrap())
         .build();
 
     let client_path = get_client_path();
     if !sync_root_id.is_registered().unwrap() {
-        let u16_display_name = U16String::from_str(DISPLAY_NAME);
-        Registration::from_sync_root_id(&sync_root_id)
-            .display_name(&u16_display_name)
-            .hydration_type(HydrationType::Full)
-            .population_type(PopulationType::Full)
-            .icon(
-                U16String::from_str("%SystemRoot%\\system32\\charmap.exe"),
-                0,
+        sync_root_id
+            .register(
+                SyncRootInfo::default()
+                    .with_display_name(DISPLAY_NAME)
+                    .with_hydration_type(HydrationType::Full)
+                    .with_population_type(PopulationType::Full)
+                    .with_icon("%SystemRoot%\\system32\\charmap.exe,0")
+                    .with_version("1.0.0")
+                    .with_recycle_bin_uri("http://cloudmirror.example.com/recyclebin")
+                    .unwrap()
+                    .with_path(Path::new(&client_path))
+                    .unwrap(),
             )
-            .version(u16str!("1.0.0"))
-            .recycle_bin_uri(u16str!("http://cloudmirror.example.com/recyclebin"))
-            .register(Path::new(&client_path))
-            .unwrap();
+            .unwrap()
     }
+
+    println!("info: {:#?}", sync_root_id.info());
 
     mark_in_sync(Path::new(&client_path), &sftp);
 

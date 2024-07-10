@@ -1,7 +1,7 @@
 use std::{
-    ffi::OsString,
+    ffi::{OsStr, OsString},
     mem::MaybeUninit,
-    os::windows::ffi::{OsStrExt, OsStringExt},
+    os::windows::ffi::OsStringExt,
     path::Path,
     ptr,
 };
@@ -9,7 +9,7 @@ use std::{
 use widestring::{U16CStr, U16Str, U16String};
 use windows::{
     core::{self, HSTRING, PWSTR},
-    Storage::Provider::{StorageProviderSyncRootInfo, StorageProviderSyncRootManager},
+    Storage::Provider::StorageProviderSyncRootManager,
     Win32::{
         Foundation::{self, LocalFree, ERROR_INSUFFICIENT_BUFFER, HANDLE, HLOCAL},
         Security::{self, Authorization::ConvertSidToStringSidW, GetTokenInformation, TOKEN_USER},
@@ -19,9 +19,12 @@ use windows::{
 
 use crate::{ext::PathExt, utility::ToHString};
 
+use super::SyncRootInfo;
+
 /// Returns a list of active sync roots.
-pub fn active_roots() -> core::Result<Vec<StorageProviderSyncRootInfo>> {
-    StorageProviderSyncRootManager::GetCurrentSyncRoots().map(|list| list.into_iter().collect())
+pub fn active_roots() -> core::Result<Vec<SyncRootInfo>> {
+    StorageProviderSyncRootManager::GetCurrentSyncRoots()
+        .map(|list| list.into_iter().map(SyncRootInfo).collect())
 }
 
 /// Returns whether or not the Cloud Filter API is supported (or at least the UWP part of it, for
@@ -47,23 +50,22 @@ impl SyncRootIdBuilder {
     /// # Panics
     ///
     /// Panics if the provider name is longer than 255 characters or contains exclamation points.
-    pub fn new(provider_name: U16String) -> Self {
+    pub fn new(provider_name: impl AsRef<OsStr>) -> Self {
+        let name = U16String::from_os_str(&provider_name);
+
         assert!(
-            provider_name.len() <= CloudFilters::CF_MAX_PROVIDER_NAME_LENGTH as usize,
+            name.len() <= CloudFilters::CF_MAX_PROVIDER_NAME_LENGTH as usize,
             "provider name must not exceed {} characters, got {} characters",
             CloudFilters::CF_MAX_PROVIDER_NAME_LENGTH,
-            provider_name.len()
+            name.len()
         );
         assert!(
-            !provider_name
-                .as_slice()
-                .iter()
-                .any(|c| *c == SyncRootId::SEPARATOR),
+            !name.as_slice().iter().any(|c| *c == SyncRootId::SEPARATOR),
             "provider name must not contain exclamation points"
         );
 
         Self {
-            provider_name,
+            provider_name: name,
             user_security_id: SecurityId(U16String::new()),
             account_name: U16String::new(),
         }
@@ -82,8 +84,8 @@ impl SyncRootIdBuilder {
     ///
     /// This value does not have any actual meaning and it could theoretically be anything.
     /// However, it is encouraged to set this value to the account name of the user on the remote.
-    pub fn account_name(mut self, account_name: U16String) -> Self {
-        self.account_name = account_name;
+    pub fn account_name(mut self, account_name: impl AsRef<OsStr>) -> Self {
+        self.account_name = U16String::from_os_str(&account_name);
         self
     }
 
@@ -110,7 +112,7 @@ impl SyncRootIdBuilder {
 ///
 /// A [SyncRootId] stores an inner, reference counted [HSTRING][windows::core::HSTRING], making this struct cheap to clone.
 #[derive(Debug, Clone)]
-pub struct SyncRootId(HSTRING);
+pub struct SyncRootId(pub(crate) HSTRING);
 
 impl SyncRootId {
     // https://docs.microsoft.com/en-us/uwp/api/windows.storage.provider.storageprovidersyncrootinfo.id?view=winrt-22000#windows-storage-provider-storageprovidersyncrootinfo-id
@@ -134,8 +136,14 @@ impl SyncRootId {
     }
 
     /// Returns the sync root information for the [SyncRootId].
-    pub fn sync_root_info(&self) -> core::Result<StorageProviderSyncRootInfo> {
-        StorageProviderSyncRootManager::GetSyncRootInformationForId(&self.0)
+    pub fn info(&self) -> core::Result<SyncRootInfo> {
+        StorageProviderSyncRootManager::GetSyncRootInformationForId(&self.0).map(SyncRootInfo)
+    }
+
+    /// Registers the sync root at the current [SyncRootId].
+    pub fn register(&self, info: SyncRootInfo) -> core::Result<()> {
+        info.0.SetId(&self.0).unwrap();
+        StorageProviderSyncRootManager::Register(&info.0)
     }
 
     /// Unregisters the sync root at the current [SyncRootId] if it exists.
@@ -196,15 +204,14 @@ impl SecurityId {
     /// # Panics
     ///
     /// Panics if the security id contains an exclamation point.
-    pub fn new(id: OsString) -> Self {
+    pub fn new(id: impl AsRef<OsStr>) -> Self {
+        let id = U16String::from_os_str(&id);
         assert!(
-            !id.as_os_str()
-                .encode_wide()
-                .any(|x| x == SyncRootId::SEPARATOR),
+            !id.as_slice().iter().any(|x| *x == SyncRootId::SEPARATOR),
             "security id cannot contain exclamation points"
         );
 
-        Self(id.into())
+        Self(id)
     }
 
     /// The [SecurityId] for the logged in user.

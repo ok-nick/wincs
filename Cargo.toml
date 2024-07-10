@@ -10,6 +10,7 @@ documentation = "https://docs.rs/cloud-filter"
 exclude = ["examples/"]
 
 [dependencies]
+flagset = "0.4.5"
 widestring = "1.0.2"
 nt-time = "0.8.0"
 memoffset = "0.9.1"

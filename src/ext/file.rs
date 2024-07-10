@@ -11,16 +11,12 @@ use windows::{
     Win32::{
         Foundation::HANDLE,
         Storage::CloudFilters::{
-            self, CfDehydratePlaceholder, CfGetSyncRootInfoByHandle, CF_SYNC_PROVIDER_STATUS,
-            CF_SYNC_ROOT_STANDARD_INFO,
+            self, CfDehydratePlaceholder, CF_SYNC_PROVIDER_STATUS, CF_SYNC_ROOT_STANDARD_INFO,
         },
     },
 };
 
-use crate::{
-    root::{HydrationPolicy, HydrationType, PopulationType, SupportedAttributes},
-    sealed::Sealed,
-};
+use crate::sealed::Sealed;
 
 /// An API extension to [File][std::fs::File].
 pub trait FileExt: AsRawHandle + Sealed {
@@ -33,37 +29,6 @@ pub trait FileExt: AsRawHandle + Sealed {
     /// is called on behalf of a logged-in user.
     fn background_dehydrate<T: RangeBounds<u64>>(&self, range: T) -> core::Result<()> {
         dehydrate(self.as_raw_handle(), range, true)
-    }
-
-    /// Gets various characteristics of the sync root.
-    fn sync_root_info(&self) -> core::Result<SyncRootInfo> {
-        // TODO: this except finds the size after 2 calls of CfGetSyncRootInfoByHandle
-        todo!()
-    }
-
-    #[allow(clippy::missing_safety_doc)]
-    /// Gets various characteristics of a placeholder using the passed blob size.
-    unsafe fn sync_root_info_unchecked(&self, blob_size: usize) -> core::Result<SyncRootInfo> {
-        let mut data = vec![0; mem::size_of::<CF_SYNC_ROOT_STANDARD_INFO>() + blob_size];
-
-        unsafe {
-            CfGetSyncRootInfoByHandle(
-                HANDLE(self.as_raw_handle() as isize),
-                CloudFilters::CF_SYNC_ROOT_INFO_STANDARD,
-                data.as_mut_ptr() as *mut _,
-                data.len() as u32,
-                None,
-            )?;
-        }
-
-        Ok(SyncRootInfo {
-            info: &unsafe {
-                data[..=mem::size_of::<CF_SYNC_ROOT_STANDARD_INFO>()]
-                    .align_to::<CF_SYNC_ROOT_STANDARD_INFO>()
-            }
-            .1[0] as *const _,
-            data,
-        })
     }
 
     /// Returns whether or not the handle is inside of a sync root.
@@ -122,25 +87,25 @@ impl SyncRootInfo {
         unsafe { &*self.info }.SyncRootFileId as u64
     }
 
-    /// The hydration policy of the sync root.
-    pub fn hydration_policy(&self) -> HydrationType {
-        unsafe { &*self.info }.HydrationPolicy.Primary.into()
-    }
+    // /// The hydration policy of the sync root.
+    // pub fn hydration_policy(&self) -> HydrationType {
+    //     unsafe { &*self.info }.HydrationPolicy.Primary.into()
+    // }
 
     /// The hydration type of the sync root.
-    pub fn hydration_type(&self) -> HydrationPolicy {
-        unsafe { &*self.info }.HydrationPolicy.Modifier.into()
-    }
+    // pub fn hydration_type(&self) -> HydrationPolicy {
+    //     unsafe { &*self.info }.HydrationPolicy.Modifier.into()
+    // }
 
-    /// The population type of the sync root.
-    pub fn population_type(&self) -> PopulationType {
-        unsafe { &*self.info }.PopulationPolicy.Primary.into()
-    }
+    // /// The population type of the sync root.
+    // pub fn population_type(&self) -> PopulationType {
+    //     unsafe { &*self.info }.PopulationPolicy.Primary.into()
+    // }
 
-    /// The attributes supported by the sync root.
-    pub fn supported_attributes(&self) -> SupportedAttributes {
-        unsafe { &*self.info }.InSyncPolicy.into()
-    }
+    // /// The attributes supported by the sync root.
+    // pub fn supported_attributes(&self) -> SupportedAttributes {
+    //     unsafe { &*self.info }.InSyncPolicy.into()
+    // }
 
     /// Whether or not hardlinks are allowed by the sync root.
     pub fn hardlinks_allowed(&self) -> bool {
