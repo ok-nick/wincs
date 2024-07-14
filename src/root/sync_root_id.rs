@@ -8,10 +8,12 @@ use std::{
 
 use widestring::{U16CStr, U16Str, U16String};
 use windows::{
-    core::{self, HSTRING, PWSTR},
+    core::{self, Error, HSTRING, PWSTR},
     Storage::Provider::StorageProviderSyncRootManager,
     Win32::{
-        Foundation::{self, LocalFree, ERROR_INSUFFICIENT_BUFFER, HANDLE, HLOCAL},
+        Foundation::{
+            self, LocalFree, ERROR_INSUFFICIENT_BUFFER, ERROR_INVALID_PARAMETER, HANDLE, HLOCAL,
+        },
         Security::{self, Authorization::ConvertSidToStringSidW, GetTokenInformation, TOKEN_USER},
         Storage::CloudFilters,
     },
@@ -141,7 +143,26 @@ impl SyncRootId {
     }
 
     /// Registers the sync root at the current [SyncRootId].
+    ///
+    /// [SyncRootInfo::display_name], [SyncRootInfo::icon], [SyncRootInfo::version] and [SyncRootInfo::path]
+    /// are required and cannot be empty.
     pub fn register(&self, info: SyncRootInfo) -> core::Result<()> {
+        macro_rules! check_field {
+            ($info:ident, $field:ident) => {
+                if $info.$field().eq(OsStr::new("")) {
+                    Err(Error::new(
+                        ERROR_INVALID_PARAMETER.to_hresult(),
+                        U16String::from_str(&concat!(stringify!($field), " cannot be empty"))
+                            .to_hstring(),
+                    ))?;
+                }
+            };
+        }
+        check_field!(info, display_name);
+        check_field!(info, icon);
+        check_field!(info, version);
+        check_field!(info, path);
+
         info.0.SetId(&self.0).unwrap();
         StorageProviderSyncRootManager::Register(&info.0)
     }

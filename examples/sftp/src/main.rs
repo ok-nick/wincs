@@ -72,8 +72,6 @@ fn main() {
             .unwrap()
     }
 
-    println!("info: {:#?}", sync_root_id.info());
-
     mark_in_sync(Path::new(&client_path), &sftp);
 
     let connection = Session::new()
