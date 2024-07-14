@@ -9,7 +9,7 @@ use std::{
 use widestring::{U16CStr, U16Str, U16String};
 use windows::{
     core::{self, Error, HSTRING, PWSTR},
-    Storage::Provider::StorageProviderSyncRootManager,
+    Storage::{Provider::StorageProviderSyncRootManager, StorageFolder},
     Win32::{
         Foundation::{
             self, LocalFree, ERROR_INSUFFICIENT_BUFFER, ERROR_INVALID_PARAMETER, HANDLE, HLOCAL,
@@ -19,7 +19,7 @@ use windows::{
     },
 };
 
-use crate::{ext::PathExt, utility::ToHString};
+use crate::utility::ToHString;
 
 use super::SyncRootInfo;
 
@@ -124,7 +124,14 @@ impl SyncRootId {
     /// Creates a [SyncRootId] from the sync root at the given path.
     pub fn from_path<P: AsRef<Path>>(path: P) -> core::Result<Self> {
         // if the id is coming from a sync root, then it must be valid
-        Ok(Self(path.as_ref().sync_root_info()?.Id()?))
+        StorageProviderSyncRootManager::GetSyncRootInformationForFolder(
+            &StorageFolder::GetFolderFromPathAsync(
+                &U16String::from_os_str(path.as_ref()).to_hstring(),
+            )
+            .unwrap()
+            .get()?,
+        )
+        .map(|info| SyncRootId(info.Id().unwrap()))
     }
 
     /// Whether or not the [SyncRootId] has already been registered.
