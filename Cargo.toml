@@ -9,6 +9,9 @@ repository = "https://github.com/ho-229/cloud-filter-rs"
 documentation = "https://docs.rs/cloud-filter"
 exclude = ["examples/"]
 
+[package.metadata.docs.rs]
+default-target = "x86_64-pc-windows-msvc"
+
 [dependencies]
 flagset = "0.4.5"
 widestring = "1.0.2"
