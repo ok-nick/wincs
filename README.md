@@ -2,7 +2,7 @@
   <h1><code>cloud-filter</code></h1>
   <p><strong>Windows Cloud Sync</strong></p>
   <p>
-    <a href="https://docs.rs/cloud-filter/"><img src="https://img.shields.io/readthedocs/cloud-filter" alt="docs" /></a>
+    <a href="https://docs.rs/cloud-filter/"><img src="https://img.shields.io/docsrs/cloud-filter" alt="docs" /></a>
     <a href="https://crates.io/crates/cloud-filter"><img src="https://img.shields.io/crates/v/cloud-filter" alt="crates" /></a>
   </p>
 </div>
