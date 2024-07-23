@@ -1,3 +1,5 @@
+use std::{future::Future, pin::Pin};
+
 use windows::core::{self, HSTRING};
 
 use crate::sealed;
@@ -29,3 +31,5 @@ pub trait ReadAt: sealed::Sealed {
 pub trait WriteAt: sealed::Sealed {
     fn write_at(&self, buf: &[u8], offset: u64) -> core::Result<()>;
 }
+
+pub(crate) type LocalBoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;

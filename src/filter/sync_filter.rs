@@ -18,9 +18,7 @@ pub trait SyncFilter: Send + Sync {
         _request: Request,
         _ticket: ticket::FetchData,
         _info: info::FetchData,
-    ) -> CResult<()> {
-        Err(CloudErrorKind::NotSupported)
-    }
+    ) -> CResult<()>;
 
     /// A placeholder hydration request has been cancelled.
     fn cancel_fetch_data(&self, _request: Request, _info: info::CancelFetchData) {}
@@ -31,7 +29,7 @@ pub trait SyncFilter: Send + Sync {
     /// **You** are responsible for validating the data in the placeholder. To approve
     /// the request, use the ticket provided.
     ///
-    /// Note that this callback is only called if [HydrationPolicy::require_validation][crate::root::HydrationPolicy::require_validation]
+    /// Note that this callback is only called if [HydrationPolicy::ValidationRequired][crate::root::HydrationPolicy::ValidationRequired]
     /// is specified.
     fn validate_data(
         &self,

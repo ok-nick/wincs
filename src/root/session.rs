@@ -33,8 +33,9 @@ use windows::{
 };
 
 use crate::{
-    filter::{self, SyncFilter},
+    filter::{self, AsyncBridge, Filter, SyncFilter},
     root::connect::Connection,
+    utility::LocalBoxFuture,
 };
 
 /// A builder to create a new connection for the sync root at the specified path.
@@ -98,6 +99,20 @@ impl Session {
             callbacks,
             filter,
         ))
+    }
+
+    pub fn connect_async<P, F, B>(
+        self,
+        path: P,
+        filter: F,
+        block_on: B,
+    ) -> core::Result<Connection<Arc<AsyncBridge<F, B>>>>
+    where
+        P: AsRef<Path>,
+        F: Filter + 'static,
+        B: Fn(LocalBoxFuture<'_, ()>) + Send + Sync + 'static,
+    {
+        self.connect(path, AsyncBridge::new(filter, block_on))
     }
 }
 
