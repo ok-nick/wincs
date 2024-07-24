@@ -20,14 +20,14 @@ pub trait Filter: Send + Sync {
         _request: Request,
         _ticket: ticket::FetchData,
         _info: info::FetchData,
-    ) -> impl Future<Output = CResult<()>> + Send + 'static;
+    ) -> impl Future<Output = CResult<()>>;
 
     /// A placeholder hydration request has been cancelled.
     fn cancel_fetch_data(
         &self,
         _request: Request,
         _info: info::CancelFetchData,
-    ) -> impl Future<Output = ()> + Send + 'static {
+    ) -> impl Future<Output = ()> {
         async {}
     }
 
@@ -44,7 +44,7 @@ pub trait Filter: Send + Sync {
         _request: Request,
         _ticket: ticket::ValidateData,
         _info: info::ValidateData,
-    ) -> impl Future<Output = CResult<()>> + Send + 'static {
+    ) -> impl Future<Output = CResult<()>> {
         async { Err(CloudErrorKind::NotSupported) }
     }
 
@@ -55,7 +55,7 @@ pub trait Filter: Send + Sync {
         _request: Request,
         _ticket: ticket::FetchPlaceholders,
         _info: info::FetchPlaceholders,
-    ) -> impl Future<Output = CResult<()>> + Send + 'static {
+    ) -> impl Future<Output = CResult<()>> {
         async { Err(CloudErrorKind::NotSupported) }
     }
 
@@ -64,27 +64,19 @@ pub trait Filter: Send + Sync {
         &self,
         _request: Request,
         _info: info::CancelFetchPlaceholders,
-    ) -> impl Future<Output = ()> + Send + 'static {
+    ) -> impl Future<Output = ()> {
         async {}
     }
 
     /// A placeholder file handle has been opened for read, write, and/or delete
     /// access.
-    fn opened(
-        &self,
-        _request: Request,
-        _info: info::Opened,
-    ) -> impl Future<Output = ()> + Send + 'static {
+    fn opened(&self, _request: Request, _info: info::Opened) -> impl Future<Output = ()> {
         async {}
     }
 
     /// A placeholder file handle that has been previously opened with read, write,
     /// and/or delete access has been closed.
-    fn closed(
-        &self,
-        _request: Request,
-        _info: info::Closed,
-    ) -> impl Future<Output = ()> + Send + 'static {
+    fn closed(&self, _request: Request, _info: info::Closed) -> impl Future<Output = ()> {
         async {}
     }
 
@@ -98,16 +90,12 @@ pub trait Filter: Send + Sync {
         _request: Request,
         _ticket: ticket::Dehydrate,
         _info: info::Dehydrate,
-    ) -> impl Future<Output = CResult<()>> + Send + 'static {
+    ) -> impl Future<Output = CResult<()>> {
         async { Err(CloudErrorKind::NotSupported) }
     }
 
     /// A placeholder dehydration request has been cancelled.
-    fn dehydrated(
-        &self,
-        _request: Request,
-        _info: info::Dehydrated,
-    ) -> impl Future<Output = ()> + Send + 'static {
+    fn dehydrated(&self, _request: Request, _info: info::Dehydrated) -> impl Future<Output = ()> {
         async {}
     }
 
@@ -120,16 +108,12 @@ pub trait Filter: Send + Sync {
         _request: Request,
         _ticket: ticket::Delete,
         _info: info::Delete,
-    ) -> impl Future<Output = CResult<()>> + Send + 'static {
+    ) -> impl Future<Output = CResult<()>> {
         async { Err(CloudErrorKind::NotSupported) }
     }
 
     /// A placeholder file has been deleted.
-    fn deleted(
-        &self,
-        _request: Request,
-        _info: info::Deleted,
-    ) -> impl Future<Output = ()> + Send + 'static {
+    fn deleted(&self, _request: Request, _info: info::Deleted) -> impl Future<Output = ()> {
         async {}
     }
 
@@ -145,16 +129,12 @@ pub trait Filter: Send + Sync {
         _request: Request,
         _ticket: ticket::Rename,
         _info: info::Rename,
-    ) -> impl Future<Output = CResult<()>> + Send + 'static {
+    ) -> impl Future<Output = CResult<()>> {
         async { Err(CloudErrorKind::NotSupported) }
     }
 
     /// A placeholder file has been renamed or moved.
-    fn renamed(
-        &self,
-        _request: Request,
-        _info: info::Renamed,
-    ) -> impl Future<Output = ()> + Send + 'static {
+    fn renamed(&self, _request: Request, _info: info::Renamed) -> impl Future<Output = ()> {
         async {}
     }
 
@@ -166,11 +146,12 @@ pub trait Filter: Send + Sync {
     /// This callback is used to detect when a user pins or unpins a placeholder file, etc.
     ///
     /// See also [Cloud Files API Frequently Asked Questions](https://www.userfilesystem.com/programming/faq/).
-    fn state_changed(&self, _changes: Vec<PathBuf>) -> impl Future<Output = ()> + Send + 'static {
+    fn state_changed(&self, _changes: Vec<PathBuf>) -> impl Future<Output = ()> {
         async {}
     }
 }
 
+/// Adapts a [Filter] to the [SyncFilter] trait.
 pub struct AsyncBridge<F, B> {
     filter: F,
     block_on: B,
@@ -178,8 +159,8 @@ pub struct AsyncBridge<F, B> {
 
 impl<F, B> AsyncBridge<F, B>
 where
-    F: Filter + Send + Sync + 'static,
-    B: Fn(LocalBoxFuture<'_, ()>),
+    F: Filter,
+    B: Fn(LocalBoxFuture<'_, ()>) + Send + Sync,
 {
     pub fn new(filter: F, block_on: B) -> Self {
         Self { filter, block_on }
@@ -188,7 +169,7 @@ where
 
 impl<F, B> SyncFilter for AsyncBridge<F, B>
 where
-    F: Filter + Send + Sync + 'static,
+    F: Filter,
     B: Fn(LocalBoxFuture<'_, ()>) + Send + Sync,
 {
     fn fetch_data(

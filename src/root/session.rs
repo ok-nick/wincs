@@ -101,6 +101,7 @@ impl Session {
         ))
     }
 
+    /// Initiates a connection to the sync root with the given [Filter].
     pub fn connect_async<P, F, B>(
         self,
         path: P,
