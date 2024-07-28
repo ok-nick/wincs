@@ -136,12 +136,11 @@ impl SyncRootId {
 
     /// Whether or not the [SyncRootId] has already been registered.
     pub fn is_registered(&self) -> core::Result<bool> {
-        Ok(
-            match StorageProviderSyncRootManager::GetSyncRootInformationForId(&self.0) {
-                Ok(_) => true,
-                Err(err) => err.code() != Foundation::ERROR_NOT_FOUND.to_hresult(),
-            },
-        )
+        match StorageProviderSyncRootManager::GetSyncRootInformationForId(&self.0) {
+            Ok(_) => Ok(true),
+            Err(e) if e.code() == Foundation::ERROR_NOT_FOUND.to_hresult() => Ok(false),
+            Err(e) => Err(e),
+        }
     }
 
     /// Returns the sync root information for the [SyncRootId].
