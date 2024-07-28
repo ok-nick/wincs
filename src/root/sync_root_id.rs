@@ -159,8 +159,7 @@ impl SyncRootId {
                 if $info.$field().eq(OsStr::new("")) {
                     Err(Error::new(
                         ERROR_INVALID_PARAMETER.to_hresult(),
-                        U16String::from_str(&concat!(stringify!($field), " cannot be empty"))
-                            .to_hstring(),
+                        concat!(stringify!($field), " cannot be empty"),
                     ))?;
                 }
             };
@@ -225,7 +224,7 @@ pub struct SecurityId(U16String);
 
 impl SecurityId {
     // https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getcurrentthreadeffectivetoken
-    const CURRENT_THREAD_EFFECTIVE_TOKEN: HANDLE = HANDLE(-6);
+    const CURRENT_THREAD_EFFECTIVE_TOKEN: HANDLE = HANDLE(-6isize as *mut ::core::ffi::c_void);
 
     /// Creates a new [SecurityId] from [OsString].
     ///
@@ -273,7 +272,7 @@ impl SecurityId {
             ConvertSidToStringSidW(token.User.Sid, &mut sid as *mut _)?;
 
             let string_sid = U16CStr::from_ptr_str(sid.0).to_os_string();
-            _ = LocalFree(HLOCAL(sid.0 as *mut _));
+            LocalFree(HLOCAL(sid.0 as *mut _));
 
             Ok(SecurityId::new(string_sid))
         }

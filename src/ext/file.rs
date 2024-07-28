@@ -47,7 +47,7 @@ fn dehydrate<T: RangeBounds<u64>>(
 ) -> core::Result<()> {
     unsafe {
         CfDehydratePlaceholder(
-            HANDLE(handle as isize),
+            HANDLE(handle),
             match range.start_bound() {
                 Bound::Included(x) => *x as i64,
                 Bound::Excluded(x) => x.saturating_add(1) as i64,
