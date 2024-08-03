@@ -1,5 +1,5 @@
 use std::{
-    sync::mpsc::Sender,
+    sync::{mpsc::Sender, Arc},
     thread::{self, JoinHandle},
     time::Duration,
 };
@@ -14,14 +14,14 @@ use crate::{filter::Callbacks, request::RawConnectionKey};
 /// does **NOT** mean the sync root will be unregistered. To do so, call
 /// [SyncRootId::unregister][crate::root::SyncRootId::unregister].
 #[derive(Debug)]
-pub struct Connection<T> {
+pub struct Connection<F> {
     connection_key: RawConnectionKey,
 
     cancel_token: Sender<()>,
     join_handle: JoinHandle<()>,
 
     _callbacks: Callbacks,
-    filter: T,
+    filter: Arc<F>,
 }
 
 // this struct could house many more windows api functions, although they all seem to do nothing
@@ -32,7 +32,7 @@ impl<T> Connection<T> {
         cancel_token: Sender<()>,
         join_handle: JoinHandle<()>,
         callbacks: Callbacks,
-        filter: T,
+        filter: Arc<T>,
     ) -> Self {
         Self {
             connection_key,

@@ -1,4 +1,4 @@
-use std::{future::Future, mem::MaybeUninit, path::PathBuf};
+use std::{future::Future, mem::MaybeUninit, ops::Deref, path::PathBuf};
 
 use crate::{
     error::{CResult, CloudErrorKind},
@@ -162,7 +162,7 @@ where
     F: Filter,
     B: Fn(LocalBoxFuture<'_, ()>) + Send + Sync,
 {
-    pub fn new(filter: F, block_on: B) -> Self {
+    pub(crate) fn new(filter: F, block_on: B) -> Self {
         Self { filter, block_on }
     }
 }
@@ -278,5 +278,17 @@ where
 
     fn state_changed(&self, changes: Vec<PathBuf>) {
         (self.block_on)(Box::pin(self.filter.state_changed(changes)))
+    }
+}
+
+impl<F, B> Deref for AsyncBridge<F, B>
+where
+    F: Filter,
+    B: Fn(LocalBoxFuture<'_, ()>) + Send + Sync,
+{
+    type Target = F;
+
+    fn deref(&self) -> &Self::Target {
+        &self.filter
     }
 }

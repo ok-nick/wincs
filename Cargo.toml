@@ -10,7 +10,7 @@ description = "A safe and idiomatic wrapper around the Windows Cloud Filter API"
 license = "MIT"
 repository = "https://github.com/ho-229/cloud-filter-rs"
 documentation = "https://docs.rs/cloud-filter"
-exclude = ["examples/", ".github/"]
+exclude = ["examples/", ".github/", "test/"]
 
 [package.metadata.docs.rs]
 default-target = "x86_64-pc-windows-msvc"
@@ -43,6 +43,12 @@ windows = { version = "0.58.0", features = [
 ] }
 globset = { version = "0.4.9", optional = true }
 
+[dev-dependencies]
+libtest-mimic = "0.7.3"
+futures = "0.3.30"
+anyhow = "1.0.86"
+powershell_script = "1.1.0"
+
 [features]
 # Enable globs in the `info::FetchPlaceholders` struct.
 globs = ["globset"]
@@ -50,3 +56,8 @@ globs = ["globset"]
 # TODO: temporarily ignored
 [workspace]
 members = ["examples/sftp"]
+
+[[test]]
+harness = false
+name = "behavior"
+path = "tests/behavior/main.rs"

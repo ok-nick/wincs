@@ -60,16 +60,16 @@ impl Session {
     }
 
     /// Initiates a connection to the sync root with the given [SyncFilter].
-    pub fn connect<P, T>(self, path: P, filter: T) -> core::Result<Connection<Arc<T>>>
+    pub fn connect<P, F>(self, path: P, filter: F) -> core::Result<Connection<F>>
     where
         P: AsRef<Path>,
-        T: SyncFilter + 'static,
+        F: SyncFilter + 'static,
     {
         // https://github.com/microsoft/Windows-classic-samples/blob/27ffb0811ca761741502feaefdb591aebf592193/Samples/CloudMirror/CloudMirror/Utilities.cpp#L19
         index_path(path.as_ref())?;
 
         let filter = Arc::new(filter);
-        let callbacks = filter::callbacks::<T>();
+        let callbacks = filter::callbacks::<F>();
         let key = unsafe {
             CfConnectSyncRoot(
                 PCWSTR(
@@ -107,7 +107,7 @@ impl Session {
         path: P,
         filter: F,
         block_on: B,
-    ) -> core::Result<Connection<Arc<AsyncBridge<F, B>>>>
+    ) -> core::Result<Connection<AsyncBridge<F, B>>>
     where
         P: AsRef<Path>,
         F: Filter + 'static,
