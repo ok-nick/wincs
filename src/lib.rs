@@ -1,3 +1,5 @@
+#![doc = "../README.md"]
+
 pub mod error;
 /// Contains traits extending common structs from the [std][std].
 pub mod ext;
