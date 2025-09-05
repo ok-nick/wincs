@@ -15,10 +15,8 @@ use thiserror::Error;
 use widestring::{u16str, U16String};
 use wincs::{
     ext::{ConvertOptions, FileExt},
-    filter::{info, ticket, SyncFilter},
-    placeholder_file::{Metadata, PlaceholderFile},
-    request::Request,
-    CloudErrorKind, PopulationType, Registration, SecurityId, SyncRootIdBuilder,
+    info, ticket, CloudErrorKind, Metadata, PlaceholderFile, PopulationType, Registration, Request,
+    SecurityId, SyncFilter, SyncRootIdBuilder,
 };
 
 // max should be 65536, this is done both in term-scp and sshfs because it's the
@@ -52,7 +50,8 @@ fn main() {
 
     let sync_root_id = SyncRootIdBuilder::new(U16String::from_str(PROVIDER_NAME))
         .user_security_id(SecurityId::current_user().unwrap())
-        .build();
+        .build()
+        .unwrap();
 
     let client_path = get_client_path();
     if !sync_root_id.is_registered().unwrap() {

@@ -1,33 +1,24 @@
 use std::{
-    ffi::OsString,
     fs::{self, File},
     io::{BufWriter, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
-    sync::{mpsc, Arc},
+    sync::mpsc,
     thread,
     time::Duration,
 };
 
-use rkyv::{with::AsString, Archive, Deserialize, Serialize};
+use rkyv::{rancor::Error as RkyvError, with::AsString, Archive, Deserialize, Serialize};
 use wfd::DialogParams;
+use widestring::U16String;
 use wincs::{
-    filter::{info, ticket, SyncFilter},
-    logger::ErrorReason,
-    placeholder_file::PlaceholderFile,
-    request::Request,
-    root::{
-        connect::ConnectOptions,
-        register::{HydrationType, PopulationType, RegisterOptions, SupportedAttributes},
-        SyncRoot,
-    },
+    info, ticket, HydrationType, PlaceholderFile, PopulationType, Registration, Request,
+    SecurityId, Session, SupportedAttributes, SyncFilter, SyncRootIdBuilder,
 };
 
 // MUST be a multiple of 4096
 const CHUNK_SIZE_BYTES: usize = 4096;
 // const CHUNK_DELAY_MS: u64 = 250;
 const CHUNK_DELAY_MS: u64 = 0;
-
-const SCRATCH_SPACE: usize = 100;
 
 const SERVER_PATH: Option<&str> = Some("C:\\Users\\nicky\\Music\\server");
 const CLIENT_PATH: Option<&str> = Some("C:\\Users\\nicky\\Music\\client");
@@ -66,38 +57,42 @@ fn main() {
             .selected_file_path
         });
 
-    let sync_root = SyncRoot::new(PROVIDER_NAME.into(), ACCOUNT_NAME.into());
-
-    // impl COM objects
-
-    sync_root
-        .register(
-            &client_path,
-            RegisterOptions::new()
-                .display_name(DISPLAY_NAME.into())
-                .icon_path("%SystemRoot%\\system32\\charmap.exe,0".into())
-                .version(VERSION.into())
-                .recycle_bin_uri("http://cloudmirror.example.com/recyclebin".into())
-                .hydration_type(HydrationType::Full)
-                .population_type(PopulationType::AlwaysFull)
-                .supported_attributes(
-                    SupportedAttributes::new()
-                        .file_creation_time(true)
-                        .directory_creation_time(true),
-                )
-                .allow_hardlinks(false)
-                .show_siblings_as_group(false),
-        )
+    let sync_root_id = SyncRootIdBuilder::new(PROVIDER_NAME.into())
+        .account_name(ACCOUNT_NAME.into())
+        .user_security_id(SecurityId::current_user().unwrap())
+        .build()
         .unwrap();
 
-    let provider = ConnectOptions::new()
-        .require_process_info(true)
+    // Register the sync root
+    let display_name = U16String::from_str(DISPLAY_NAME);
+    let version = U16String::from_str(VERSION);
+    let recycle_uri = U16String::from_str("http://cloudmirror.example.com/recyclebin");
+
+    Registration::from_sync_root_id(&sync_root_id)
+        .display_name(display_name.as_ref())
+        .icon("%SystemRoot%\\system32\\charmap.exe".into(), 0)
+        .version(version.as_ref())
+        .recycle_bin_uri(recycle_uri.as_ref())
+        .hydration_type(HydrationType::Full)
+        .population_type(PopulationType::AlwaysFull)
+        .supported_attributes(
+            SupportedAttributes::new()
+                .file_creation_time()
+                .directory_creation_time(),
+        )
+        .allow_hardlinks()
+        .show_siblings_as_group()
+        .register(&client_path)
+        .unwrap();
+
+    // Connect to the sync root
+    let provider = Session::new()
         .connect(
             &client_path,
-            &Arc::new(Filter {
+            Filter {
                 client_path: client_path.clone(),
                 server_path: server_path.clone(),
-            }),
+            },
         )
         .unwrap();
 
@@ -112,7 +107,7 @@ fn main() {
 
     provider.disconnect().unwrap();
 
-    sync_root.unregister().unwrap();
+    sync_root_id.unregister().unwrap();
 
     // cleanup any placeholders whilst keeping the client folder intact
     fs::read_dir(&client_path).unwrap().for_each(|entry| {
@@ -127,7 +122,7 @@ fn main() {
 
 #[derive(Debug, Archive, Serialize, Deserialize)]
 struct FileBlob {
-    #[with(AsString)]
+    #[rkyv(with = AsString)]
     relative_path: PathBuf,
 }
 
@@ -140,28 +135,27 @@ fn create_placeholders(server_path: &Path, client_path: &Path, relative_path: &P
         let is_dir = metadata.is_dir();
 
         let file_name = entry.file_name();
-        let relative_path = relative_path.join(&file_name);
+        let relative_full_path = relative_path.join(&file_name);
 
-        rkyv::to_bytes::<_, 100>(&FileBlob {
-            relative_path: relative_path.clone(),
-        });
+        let blob = rkyv::to_bytes::<RkyvError>(&FileBlob {
+            relative_path: relative_full_path.clone(),
+        })
+        .unwrap();
 
-        let placeholder_path = client_path.join(&relative_path);
+        let placeholder_path = client_path.join(&relative_full_path);
+
         if !placeholder_path.exists() {
-            PlaceholderFile::new()
+            PlaceholderFile::new(&file_name)
                 .metadata(metadata.into())
-                .disable_on_demand_population(true)
-                .mark_in_sync(true)
-                .blob::<_, SCRATCH_SPACE>(FileBlob {
-                    relative_path: relative_path.clone(),
-                })
-                .unwrap()
-                .create(&placeholder_path)
+                .has_no_children()
+                .mark_sync()
+                .blob(blob.to_vec())
+                .create::<&PathBuf>(&client_path.join(relative_path))
                 .unwrap();
         }
 
         if is_dir {
-            create_placeholders(server_path, client_path, &relative_path);
+            create_placeholders(server_path, client_path, &relative_full_path);
         }
 
         // TODO: apply custom state to placeholder like in sample
@@ -170,15 +164,17 @@ fn create_placeholders(server_path: &Path, client_path: &Path, relative_path: &P
 
 #[derive(Debug)]
 struct Filter {
+    #[allow(dead_code)]
     client_path: PathBuf,
     server_path: PathBuf,
 }
 
 impl SyncFilter for Filter {
-    type Error = FilterError;
-
-    fn fetch_data(&self, request: Request, info: info::FetchData) -> Result<(), Self::Error> {
-        let blob = request.file_blob::<FileBlob, SCRATCH_SPACE>().unwrap();
+    fn fetch_data(&self, request: Request, _ticket: ticket::FetchData, info: info::FetchData) {
+        let blob = request.file_blob();
+        // convert the blob back to a path
+        let archived = rkyv::access::<ArchivedFileBlob, RkyvError>(blob).unwrap();
+        let blob: FileBlob = rkyv::deserialize::<FileBlob, RkyvError>(archived).unwrap();
 
         // TODO: this is the same as just using path with the drive letter attached
         // + 1 is to account for the path separator
@@ -232,8 +228,6 @@ impl SyncFilter for Filter {
 
         // TODO: if anything fails (remove unwraps) then call TransferData with
         // a failure CompletionStatus
-
-        Ok(())
     }
 
     fn validate_data(
@@ -241,81 +235,71 @@ impl SyncFilter for Filter {
         request: Request,
         ticket: ticket::ValidateData,
         info: info::ValidateData,
-    ) -> Result<(), Self::Error> {
-        println!("validate data");
-        Ok(())
+    ) {
+        println!("Validating data for {}", request.path().display());
+        let range = info.file_range();
+        match ticket.pass(range) {
+            Ok(()) => println!("Data validated successfully"),
+            Err(e) => eprintln!("Error validating data: {:?}", e),
+        }
     }
 
-    fn cancel_fetch_data(&self, request: Request, info: info::Cancel) -> Result<(), Self::Error> {
-        println!("cancel fetch data");
-        Ok(())
+    fn cancel_fetch_data(&self, request: Request, info: info::CancelFetchData) {
+        println!("Canceling fetch data for {}", request.path().display());
+        if info.timeout() {
+            println!("Fetch data timed out");
+        } else if info.user_cancelled() {
+            println!("Fetch data cancelled by user");
+        }
     }
 
     fn fetch_placeholders(
         &self,
-        request: Request,
-        info: info::FetchPlaceholders,
-    ) -> Result<(), Self::Error> {
+        _request: Request,
+        ticket: ticket::FetchPlaceholders,
+        _info: info::FetchPlaceholders,
+    ) {
         println!("fetch placeholders");
-        Ok(())
+        ticket.pass_with_placeholder(&mut []).unwrap();
     }
 
-    fn cancel_fetch_placeholders(
-        &self,
-        request: Request,
-        info: info::Cancel,
-    ) -> Result<(), Self::Error> {
-        println!("cancel fetch placeholders");
-        Ok(())
+    fn cancel_fetch_placeholders(&self, _request: Request, info: info::CancelFetchPlaceholders) {
+        println!(
+            "Canceling fetch placeholders for {}",
+            _request.path().display()
+        );
+        if info.timeout() {
+            println!("Fetch placeholders timed out");
+        } else if info.user_cancelled() {
+            println!("Fetch placeholders cancelled by user");
+        }
     }
 
-    fn opened(&self, request: Request, info: info::Opened) -> Result<(), Self::Error> {
+    fn opened(&self, request: Request, _info: info::Opened) {
         println!("file opened {:?}", request.path());
-        Ok(())
     }
 
-    fn closed(&self, request: Request, info: info::Closed) -> Result<(), Self::Error> {
+    fn closed(&self, request: Request, _info: info::Closed) {
         println!("file closed {:?}", request.path());
-        Ok(())
     }
 
-    fn dehydrate(
-        &self,
-        request: Request,
-        ticket: ticket::Dehydrate,
-        info: info::Dehydrate,
-    ) -> Result<(), Self::Error> {
+    fn dehydrate(&self, _request: Request, _ticket: ticket::Dehydrate, _info: info::Dehydrate) {
         println!("dehydrate");
-        Ok(())
     }
 
-    fn dehydrated(&self, request: Request, info: info::Dehydrated) -> Result<(), Self::Error> {
+    fn dehydrated(&self, _request: Request, _info: info::Dehydrated) {
         println!("dehydrated");
-
-        Ok(())
     }
 
-    fn delete(
-        &self,
-        request: Request,
-        ticket: ticket::Delete,
-        info: info::Delete,
-    ) -> Result<(), Self::Error> {
+    fn delete(&self, _request: Request, _ticket: ticket::Delete, _info: info::Delete) {
         println!("delete");
-        Ok(())
     }
 
-    fn deleted(&self, request: Request, info: info::Deleted) -> Result<(), Self::Error> {
+    fn deleted(&self, _request: Request, _info: info::Deleted) {
         println!("deleted");
-        Ok(())
     }
 
-    fn rename(
-        &self,
-        request: Request,
-        ticket: ticket::Rename,
-        info: info::Rename,
-    ) -> Result<(), Self::Error> {
+    fn rename(&self, request: Request, ticket: ticket::Rename, info: info::Rename) {
         let source_path = request.path();
         println!(
             "rename\n\tsource_path: {:?}\n\ttarget_path: {:?}",
@@ -350,15 +334,15 @@ impl SyncFilter for Filter {
             },
         }
 
-        Ok(())
+        _ = ticket.pass();
     }
 
-    fn renamed(&self, request: Request, info: info::Renamed) -> Result<(), Self::Error> {
+    fn renamed(&self, _request: Request, _info: info::Renamed) {
         println!("renamed");
-        Ok(())
     }
 }
 
+/*
 pub struct FilterError;
 
 impl ErrorReason for FilterError {
@@ -374,3 +358,4 @@ impl ErrorReason for FilterError {
         todo!()
     }
 }
+*/

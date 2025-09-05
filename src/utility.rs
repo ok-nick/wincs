@@ -8,7 +8,7 @@ where
 {
     /// Converts a 16-bit buffer to a Windows reference-counted [HSTRING][windows::core::HSTRING].
     fn to_hstring(&self) -> core::Result<HSTRING> {
-        HSTRING::from_wide(self.as_ref())
+        Ok(HSTRING::from_wide(self.as_ref()))
     }
 }
 

@@ -11,7 +11,7 @@ use windows::Win32::Storage::CloudFilters::{
 
 /// Information for the [SyncFilter::fetch_data][crate::SyncFilter::fetch_data] callback.
 #[derive(Debug, Clone, Copy)]
-pub struct FetchData(pub(crate) CF_CALLBACK_PARAMETERS_0_6);
+pub struct FetchData(pub(crate) CF_CALLBACK_PARAMETERS_0_1);
 
 impl FetchData {
     /// Whether or not the callback was called from an interrupted hydration.
@@ -102,7 +102,7 @@ struct CancelFetchDataDebug {
 
 /// Information for the [SyncFilter::validate_data][crate::SyncFilter::validate_data] callback.
 #[derive(Debug, Clone, Copy)]
-pub struct ValidateData(pub(crate) CF_CALLBACK_PARAMETERS_0_11);
+pub struct ValidateData(pub(crate) CF_CALLBACK_PARAMETERS_0_2);
 
 impl ValidateData {
     /// Whether or not the callback failed as a result of the 60 second timeout.
@@ -120,7 +120,7 @@ impl ValidateData {
 /// Information for the [SyncFilter::fetch_placeholders][crate::SyncFilter::fetch_placeholders]
 /// callback.
 #[derive(Debug)]
-pub struct FetchPlaceholders(pub(crate) CF_CALLBACK_PARAMETERS_0_7);
+pub struct FetchPlaceholders(pub(crate) CF_CALLBACK_PARAMETERS_0_3);
 
 impl FetchPlaceholders {
     /// A glob pattern specifying the files that should be fetched.
@@ -180,7 +180,7 @@ struct CancelFetchPlaceholdersDebug {
 
 /// Information for the [SyncFilter::opened][crate::SyncFilter::opened] callback.
 #[derive(Debug, Clone, Copy)]
-pub struct Opened(pub(crate) CF_CALLBACK_PARAMETERS_0_8);
+pub struct Opened(pub(crate) CF_CALLBACK_PARAMETERS_0_4);
 
 impl Opened {
     /// The placeholder metadata is corrupt.
@@ -197,7 +197,7 @@ impl Opened {
 
 /// Information for the [SyncFilter::closed][crate::SyncFilter::closed] callback.
 #[derive(Debug, Clone, Copy)]
-pub struct Closed(pub(crate) CF_CALLBACK_PARAMETERS_0_1);
+pub struct Closed(pub(crate) CF_CALLBACK_PARAMETERS_0_5);
 
 impl Closed {
     /// Whether or not the placeholder was deleted as a result of the close.
@@ -208,7 +208,7 @@ impl Closed {
 
 /// Information for the [SyncFilter::dehydrate][crate::SyncFilter::dehydrate] callback.
 #[derive(Debug, Clone, Copy)]
-pub struct Dehydrate(pub(crate) CF_CALLBACK_PARAMETERS_0_3);
+pub struct Dehydrate(pub(crate) CF_CALLBACK_PARAMETERS_0_6);
 
 impl Dehydrate {
     /// Whether or not the callback was called from a system background service.
@@ -224,7 +224,7 @@ impl Dehydrate {
 
 /// Information for the [SyncFilter::dehydrated][crate::SyncFilter::dehydrated] callback.
 #[derive(Debug, Clone, Copy)]
-pub struct Dehydrated(pub(crate) CF_CALLBACK_PARAMETERS_0_2);
+pub struct Dehydrated(pub(crate) CF_CALLBACK_PARAMETERS_0_7);
 
 impl Dehydrated {
     /// Whether or not the callback was called from a system background service.
@@ -245,7 +245,7 @@ impl Dehydrated {
 
 /// Information for the [SyncFilter::delete][crate::SyncFilter::delete] callback.
 #[derive(Debug, Clone, Copy)]
-pub struct Delete(pub(crate) CF_CALLBACK_PARAMETERS_0_5);
+pub struct Delete(pub(crate) CF_CALLBACK_PARAMETERS_0_8);
 
 impl Delete {
     /// Whether or not the placeholder being deleted is a directory.
@@ -262,7 +262,7 @@ impl Delete {
 /// Information for the [SyncFilter::deleted][crate::SyncFilter::deleted] callback.
 #[derive(Debug, Clone, Copy)]
 #[allow(dead_code)]
-pub struct Deleted(pub(crate) CF_CALLBACK_PARAMETERS_0_4);
+pub struct Deleted(pub(crate) CF_CALLBACK_PARAMETERS_0_9);
 
 /// Information for the [SyncFilter::rename][crate::SyncFilter::rename] callback.
 #[derive(Debug)]
@@ -296,7 +296,7 @@ impl Rename {
 
 /// Information for the [SyncFilter::renamed][crate::SyncFilter::renamed] callback.
 #[derive(Debug)]
-pub struct Renamed(pub(crate) CF_CALLBACK_PARAMETERS_0_9);
+pub struct Renamed(pub(crate) CF_CALLBACK_PARAMETERS_0_11);
 
 impl Renamed {
     /// The full path the placeholder has been moved from.
