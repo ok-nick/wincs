@@ -120,10 +120,10 @@ impl PlaceholderFile {
     ///
     /// If you need to create placeholders from the [SyncFilter::fetch_placeholders][crate::SyncFilter::fetch_placeholders] callback, do not use this method. Instead, use
     /// [FetchPlaceholders::pass_with_placeholders][crate::ticket::FetchPlaceholders::pass_with_placeholders].
-    pub fn create<P: AsRef<Path>>(self, parent: impl AsRef<Path>) -> core::Result<Usn> {
+    pub fn create(self, parent: &Path) -> core::Result<Usn> {
         unsafe {
             CfCreatePlaceholders(
-                PCWSTR::from_raw(U16CString::from_os_str(parent.as_ref()).unwrap().as_ptr()),
+                PCWSTR::from_raw(U16CString::from_os_str(parent).unwrap().as_ptr()),
                 &mut [self.0],
                 CloudFilters::CF_CREATE_FLAG_NONE,
                 None,

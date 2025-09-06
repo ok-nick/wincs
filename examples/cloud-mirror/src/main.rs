@@ -150,7 +150,7 @@ fn create_placeholders(server_path: &Path, client_path: &Path, relative_path: &P
                 .has_no_children()
                 .mark_sync()
                 .blob(blob.to_vec())
-                .create::<&PathBuf>(&client_path.join(relative_path))
+                .create(&client_path.join(relative_path))
                 .unwrap();
         }
 

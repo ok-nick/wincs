@@ -137,26 +137,20 @@ impl SyncRootId {
     /// The order goes as follows:
     /// `(provider-id, security-id, account-name)`
     pub fn to_components(&self) -> core::Result<(&U16Str, &U16Str, &U16Str)> {
-        let bytes = &self.0;
+        // Create an iterator that will yield a maximum of 3 parts.
+        let mut parts = self.0.splitn(3, |&byte| byte == Self::SEPARATOR);
 
-        // Find the first separator
-        let first_sep = bytes
-            .iter()
-            .position(|&byte| byte == Self::SEPARATOR)
-            .ok_or(Foundation::ERROR_INVALID_DATA)?;
-
-        // Find the second separator after the first one
-        let second_sep = bytes[(first_sep + 1)..]
-            .iter()
-            .position(|&byte| byte == Self::SEPARATOR)
-            .map(|pos| pos + first_sep + 1)
-            .ok_or(Foundation::ERROR_INVALID_DATA)?;
-
-        Ok((
-            U16Str::from_slice(&bytes[..first_sep]),
-            U16Str::from_slice(&bytes[(first_sep + 1)..second_sep]),
-            U16Str::from_slice(&bytes[(second_sep + 1)..]),
-        ))
+        // Pattern match on the iterator to safely extract the three parts.
+        if let (Some(first), Some(second), Some(third)) = (parts.next(), parts.next(), parts.next())
+        {
+            Ok((
+                U16Str::from_slice(first),
+                U16Str::from_slice(second),
+                U16Str::from_slice(third),
+            ))
+        } else {
+            Err(Foundation::ERROR_INVALID_DATA.into())
+        }
     }
 }
 
@@ -214,5 +208,36 @@ impl SecurityId {
 
             Ok(SecurityId::new_unchecked(string_sid))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_syncroot_id_parse() {
+        let id = SyncRootId(HSTRING::from("provider-id!security-id!account-name"));
+        let components = id.to_components();
+        assert!(components.is_ok());
+
+        let (provider, security, account) = id.to_components().unwrap();
+        assert_eq!(provider, U16String::from("provider-id"));
+        assert_eq!(security, U16String::from("security-id"));
+        assert_eq!(account, U16String::from("account-name"));
+    }
+
+    #[test]
+    fn test_invalid_syncroot_id_parse() {
+        let id = SyncRootId(HSTRING::from("provider-id!security-id0000"));
+        let components = id.to_components();
+        assert!(components.is_err());
+    }
+
+    #[test]
+    fn test_empty_syncroot_id_parse() {
+        let id = SyncRootId(HSTRING::from(""));
+        let components = id.to_components();
+        assert!(components.is_err());
     }
 }
