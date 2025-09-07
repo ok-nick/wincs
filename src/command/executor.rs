@@ -1,6 +1,8 @@
-use std::{mem, ptr};
+use std::{
+    mem::{self, offset_of},
+    ptr,
+};
 
-use memoffset::offset_of;
 use windows::{
     core,
     Win32::Storage::CloudFilters::{

@@ -5,7 +5,7 @@ use windows::Win32::Storage::CloudFilters::{CF_CALLBACK_INFO, CF_PROCESS_INFO};
 
 use crate::placeholder::Placeholder;
 
-pub type RawConnectionKey = isize;
+pub type RawConnectionKey = i64;
 pub type RawTransferKey = i64;
 
 /// A struct containing various information for the current file operation.

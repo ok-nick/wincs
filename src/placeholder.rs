@@ -3,28 +3,26 @@ use std::{
     mem::ManuallyDrop,
     ops::Range,
     path::{Path, PathBuf},
-    ptr,
 };
-
 use widestring::U16CString;
 use windows::{
-    core::{self, GUID},
+    core::{self, GUID, PCWSTR},
     Win32::{
+        Foundation::PROPERTYKEY,
         Storage::{
             CloudFilters::{self, CfReportProviderProgress, CF_CONNECTION_KEY},
             EnhancedStorage,
         },
         System::{
             Com::StructuredStorage::{
-                PROPVARIANT, PROPVARIANT_0, PROPVARIANT_0_0, PROPVARIANT_0_0_0,
+                InitPropVariantFromUInt64Vector, PROPVARIANT, PROPVARIANT_0, PROPVARIANT_0_0,
+                PROPVARIANT_0_0_0,
             },
-            Ole::VT_UI4,
+            Variant::VT_UI4,
         },
         UI::Shell::{
             self, IShellItem2,
-            PropertiesSystem::{
-                self, IPropertyStore, InitPropVariantFromUInt64Vector, PROPERTYKEY,
-            },
+            PropertiesSystem::{self, IPropertyStore},
             SHChangeNotify, SHCreateItemFromParsingName,
         },
     },
@@ -143,25 +141,32 @@ impl Placeholder {
                 completed as i64,
             )?;
 
-            let item: IShellItem2 = SHCreateItemFromParsingName(self.path.as_os_str(), None)?;
+            let item: IShellItem2 = SHCreateItemFromParsingName(
+                PCWSTR::from_raw(
+                    U16CString::from_os_str(self.path.as_os_str())
+                        .unwrap()
+                        .as_ptr(),
+                ),
+                None,
+            )?;
             let store: IPropertyStore = item.GetPropertyStore(
                 PropertiesSystem::GPS_READWRITE | PropertiesSystem::GPS_VOLATILEPROPERTIESONLY,
             )?;
 
-            let progress = InitPropVariantFromUInt64Vector(&mut [completed, total] as *mut _, 2)?;
+            let progress = InitPropVariantFromUInt64Vector(Some(&[completed, total]))?;
             store.SetValue(
                 &STORAGE_PROVIDER_TRANSFER_PROGRESS as *const _,
                 &progress as *const _,
             )?;
 
             let status = InitPropVariantFromUInt32(if completed < total {
-                PropertiesSystem::STS_TRANSFERRING.0
+                PropertiesSystem::STS_TRANSFERRING.0 as u32
             } else {
-                PropertiesSystem::STS_NONE.0
+                PropertiesSystem::STS_NONE.0 as u32
             });
             store.SetValue(
                 &EnhancedStorage::PKEY_SyncTransferStatus as *const _,
-                &status as *const _,
+                &status,
             )?;
 
             store.Commit()?;
@@ -169,8 +174,8 @@ impl Placeholder {
             SHChangeNotify(
                 Shell::SHCNE_UPDATEITEM,
                 Shell::SHCNF_PATHW,
-                U16CString::from_os_str_unchecked(self.path.as_os_str()).as_ptr() as *const _,
-                ptr::null_mut(),
+                Some(U16CString::from_os_str_unchecked(self.path.as_os_str()).as_ptr() as *const _),
+                None,
             );
 
             Ok(())
@@ -320,7 +325,7 @@ fn InitPropVariantFromUInt32(ulVal: u32) -> PROPVARIANT {
     PROPVARIANT {
         Anonymous: PROPVARIANT_0 {
             Anonymous: ManuallyDrop::new(PROPVARIANT_0_0 {
-                vt: VT_UI4.0 as u16,
+                vt: VT_UI4,
                 Anonymous: PROPVARIANT_0_0_0 { ulVal },
                 ..Default::default()
             }),

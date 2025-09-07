@@ -4,10 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-widestring = "1.0.2"
-memoffset = "0.6.4"
-windows = { version = "0.33.0", features = [
-  "alloc",
+widestring = "1.1.0"
+windows = { version = "0.61.3", features = [
   "Win32_Foundation",
   "Win32_Storage_CloudFilters",
   "Win32_System_SystemServices",
@@ -30,13 +28,14 @@ windows = { version = "0.33.0", features = [
   "Storage_Streams",
   "Win32_System_Ioctl",
   "Win32_Security",
+  "Win32_System_Variant",
+  "Storage_Search",
 ] }
-globset = { version = "0.4.9", optional = true }
+globset = { version = "0.4.14", optional = true }
 
 [features]
 # Enable globs in the `info::FetchPlaceholders` struct.
 globs = ["globset"]
 
-# TODO: temporarily ignored
 [workspace]
-members = ["examples/sftp"]
+members = ["examples/*"]
