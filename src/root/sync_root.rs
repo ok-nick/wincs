@@ -1,11 +1,11 @@
-use std::{mem::MaybeUninit, path::Path, ptr};
+use std::{ffi, mem::MaybeUninit, path::Path, ptr};
 
 use widestring::{U16CString, U16Str, U16String};
 use windows::{
     core::{self, HSTRING, PWSTR},
     Storage::Provider::StorageProviderSyncRootManager,
     Win32::{
-        Foundation::{self, GetLastError, LocalFree, HANDLE, HLOCAL},
+        Foundation::{self, GetLastError, LocalFree, HANDLE, HLOCAL, SUCCESS},
         Security::{self, Authorization::ConvertSidToStringSidW, GetTokenInformation, TOKEN_USER},
         Storage::CloudFilters,
     },
@@ -81,7 +81,7 @@ impl SyncRootIdBuilder {
                 self.account_name.as_slice(),
             ]
             .join(&SyncRootId::SEPARATOR),
-        )?))
+        )))
     }
 }
 
@@ -124,7 +124,7 @@ impl SyncRootId {
 
     /// A reference to the [SyncRootId][crate::SyncRootId] as a 16 bit string.
     pub fn as_u16str(&self) -> &U16Str {
-        U16Str::from_slice(self.0.as_wide())
+        U16Str::from_slice(&self.0)
     }
 
     /// A reference to the [SyncRootId][crate::SyncRootId] as an [HSTRING][windows::core::HSTRING] (its inner value).
@@ -136,25 +136,21 @@ impl SyncRootId {
     ///
     /// The order goes as follows:
     /// `(provider-id, security-id, account-name)`
-    // TODO: This doesn't work properly, it forgets to include the account name
-    pub fn to_components(&self) -> (&U16Str, &U16Str, &U16Str) {
-        let mut components = Vec::with_capacity(3);
-        let mut bytes = self.0.as_wide();
+    pub fn to_components(&self) -> core::Result<(&U16Str, &U16Str, &U16Str)> {
+        // Create an iterator that will yield a maximum of 3 parts.
+        let mut parts = self.0.splitn(3, |&byte| byte == Self::SEPARATOR);
 
-        for index in 0..2 {
-            match bytes.iter().position(|&byte| byte == Self::SEPARATOR) {
-                Some(position) => {
-                    components.insert(index, U16Str::from_slice(bytes));
-                    bytes = &bytes[(position + 1)..];
-                }
-                None => {
-                    // TODO: return a result instead of panic
-                    panic!("malformed sync root id, got {:?}", components)
-                }
-            }
+        // Pattern match on the iterator to safely extract the three parts.
+        if let (Some(first), Some(second), Some(third)) = (parts.next(), parts.next(), parts.next())
+        {
+            Ok((
+                U16Str::from_slice(first),
+                U16Str::from_slice(second),
+                U16Str::from_slice(third),
+            ))
+        } else {
+            Err(Foundation::ERROR_INVALID_DATA.into())
         }
-
-        (components[0], components[1], components[2])
     }
 }
 
@@ -164,7 +160,7 @@ pub struct SecurityId(U16String);
 
 impl SecurityId {
     // https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getcurrentthreadeffectivetoken
-    const CURRENT_THREAD_EFFECTIVE_TOKEN: HANDLE = HANDLE(-6);
+    const CURRENT_THREAD_EFFECTIVE_TOKEN: HANDLE = HANDLE(-6i32 as *mut ffi::c_void);
 
     /// Creates a new [SecurityId][crate::SecurityId] without any assertions.
     pub fn new_unchecked(id: U16String) -> Self {
@@ -185,9 +181,7 @@ impl SecurityId {
                 &mut token_size,
             )
             .is_err()
-                && GetLastError().is_err_and(|err| {
-                    err.code() == Foundation::ERROR_INSUFFICIENT_BUFFER.to_hresult()
-                })
+                && GetLastError() == Foundation::ERROR_INSUFFICIENT_BUFFER
             {
                 GetTokenInformation(
                     Self::CURRENT_THREAD_EFFECTIVE_TOKEN,
@@ -203,9 +197,47 @@ impl SecurityId {
             ConvertSidToStringSidW(token.User.Sid, &mut sid as *mut _)?;
 
             let string_sid = U16CString::from_ptr_str(sid.0).into_ustring();
-            LocalFree(HLOCAL(sid.0 as *mut _))?;
+
+            // Fix the LocalFree call - we should handle the result properly
+            if !LocalFree(Some(HLOCAL(sid.0 as *mut _))).0.is_null() {
+                let last_error = GetLastError();
+                if last_error.0 != SUCCESS {
+                    return Err(last_error.into());
+                }
+            }
 
             Ok(SecurityId::new_unchecked(string_sid))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_syncroot_id_parse() {
+        let id = SyncRootId(HSTRING::from("provider-id!security-id!account-name"));
+        let components = id.to_components();
+        assert!(components.is_ok());
+
+        let (provider, security, account) = id.to_components().unwrap();
+        assert_eq!(provider, U16String::from("provider-id"));
+        assert_eq!(security, U16String::from("security-id"));
+        assert_eq!(account, U16String::from("account-name"));
+    }
+
+    #[test]
+    fn test_invalid_syncroot_id_parse() {
+        let id = SyncRootId(HSTRING::from("provider-id!security-id0000"));
+        let components = id.to_components();
+        assert!(components.is_err());
+    }
+
+    #[test]
+    fn test_empty_syncroot_id_parse() {
+        let id = SyncRootId(HSTRING::from(""));
+        let components = id.to_components();
+        assert!(components.is_err());
     }
 }

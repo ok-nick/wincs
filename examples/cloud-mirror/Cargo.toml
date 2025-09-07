@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 wincs = { path = "../../" }
-widestring = "0.5.1"
+widestring = "1.2.0"
 ctrlc = "3.2.1"
 wfd = "0.1.7"
-rkyv = "0.7.30"
+rkyv = "0.8.11"

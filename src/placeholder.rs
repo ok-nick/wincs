@@ -4,11 +4,11 @@ use std::{
     ops::Range,
     path::{Path, PathBuf},
 };
-
 use widestring::U16CString;
 use windows::{
     core::{self, GUID, PCWSTR},
     Win32::{
+        Foundation::PROPERTYKEY,
         Storage::{
             CloudFilters::{self, CfReportProviderProgress, CF_CONNECTION_KEY},
             EnhancedStorage,
@@ -22,7 +22,7 @@ use windows::{
         },
         UI::Shell::{
             self, IShellItem2,
-            PropertiesSystem::{self, IPropertyStore, PROPERTYKEY},
+            PropertiesSystem::{self, IPropertyStore},
             SHChangeNotify, SHCreateItemFromParsingName,
         },
     },

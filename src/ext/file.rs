@@ -40,10 +40,10 @@ pub trait FileExt: AsRawHandle {
     /// * The file or directory must be the sync root directory itself, or a descendant directory.
     ///     * [CloudErrorKind::NotUnderSyncRoot][crate::CloudErrorKind::NotUnderSyncRoot]
     /// * If [ConvertOptions::dehydrate][ConvertOptions::dehydrate] is selected, the sync root must
-    /// not be registered with [HydrationType::AlwaysFull][crate::HydrationType::AlwaysFull].
+    ///   not be registered with [HydrationType::AlwaysFull][crate::HydrationType::AlwaysFull].
     ///     * [CloudErrorKind::NotSupported][crate::CloudErrorKind::NotSupported]
     /// * If [ConvertOptions::dehydrate][ConvertOptions::dehydrate] is selected, the placeholder
-    /// must not be pinned.
+    ///   must not be pinned.
     ///     * [CloudErrorKind::Pinned][crate::CloudErrorKind::Pinned]
     /// * The handle must have write access.
     ///     * [CloudErrorKind::AccessDenied][crate::CloudErrorKind::AccessDenied]
@@ -56,7 +56,7 @@ pub trait FileExt: AsRawHandle {
         let mut usn = MaybeUninit::<i64>::uninit();
         unsafe {
             CfConvertToPlaceholder(
-                HANDLE(self.as_raw_handle() as isize),
+                HANDLE(self.as_raw_handle()),
                 options.blob.map(|blob| blob.as_ptr() as *const _),
                 options.blob.map_or(0, |blob| blob.len() as u32),
                 options.flags,
@@ -71,13 +71,13 @@ pub trait FileExt: AsRawHandle {
     ///
     /// Restrictions:
     /// * If the file is not already hydrated, it will implicitly call
-    /// [SyncFilter::fetch_data][crate::SyncFilter::fetch_data]. If the file can not be hydrated,
-    /// the conversion will fail.
-    /// The handle must have write access.
+    ///   [SyncFilter::fetch_data][crate::SyncFilter::fetch_data]. If the file can not be hydrated,
+    ///   the conversion will fail.
+    /// * The handle must have write access.
     fn to_file(&self) -> core::Result<()> {
         unsafe {
             CfRevertPlaceholder(
-                HANDLE(self.as_raw_handle() as isize),
+                HANDLE(self.as_raw_handle()),
                 CloudFilters::CF_REVERT_FLAG_NONE,
                 None,
             )
@@ -90,13 +90,13 @@ pub trait FileExt: AsRawHandle {
     /// * The file or directory must be the sync root directory itself, or a descendant directory.
     ///     * [CloudErrorKind::NotUnderSyncRoot][crate::CloudErrorKind::NotUnderSyncRoot]
     /// * If [UpdateOptions::dehydrate][UpdateOptions::dehydrate] is selected, the sync root must
-    /// not be registered with [HydrationType::AlwaysFull][crate::HydrationType::AlwaysFull].
+    ///   not be registered with [HydrationType::AlwaysFull][crate::HydrationType::AlwaysFull].
     ///     * [CloudErrorKind::NotSupported][crate::CloudErrorKind::NotSupported]
     /// * If [UpdateOptions::dehydrate][UpdateOptions::dehydrate] is selected, the placeholder
-    /// must not be pinned.
+    ///   must not be pinned.
     ///     * [CloudErrorKind::Pinned][crate::CloudErrorKind::Pinned]
     /// * If [UpdateOptions::dehydrate][UpdateOptions::dehydrate] is selected, the placeholder
-    /// must be in sync.
+    ///   must be in sync.
     ///     * [CloudErrorKind::NotInSync][crate::CloudErrorKind::NotInSync]
     /// * The handle must have write access.
     ///     * [CloudErrorKind::AccessDenied][crate::CloudErrorKind::AccessDenied]
@@ -105,7 +105,7 @@ pub trait FileExt: AsRawHandle {
         let mut usn = usn as i64;
         unsafe {
             CfUpdatePlaceholder(
-                HANDLE(self.as_raw_handle() as isize),
+                HANDLE(self.as_raw_handle()),
                 options.metadata.map(|x| &x.0 as *const _),
                 options.blob.map(|x| x.as_ptr() as *const _),
                 options.blob.map_or(0, |x| x.len() as u32),
@@ -124,7 +124,7 @@ pub trait FileExt: AsRawHandle {
     fn hydrate<T: RangeBounds<u64>>(&self, range: T) -> core::Result<()> {
         unsafe {
             CfHydratePlaceholder(
-                HANDLE(self.as_raw_handle() as isize),
+                HANDLE(self.as_raw_handle()),
                 match range.start_bound() {
                     Bound::Included(x) => *x as i64,
                     Bound::Excluded(x) => x.saturating_add(1) as i64,
@@ -158,7 +158,7 @@ pub trait FileExt: AsRawHandle {
         let mut length = 0;
         unsafe {
             CfGetPlaceholderRangeInfo(
-                HANDLE(self.as_raw_handle() as isize),
+                HANDLE(self.as_raw_handle()),
                 read_type.into(),
                 offset as i64,
                 buffer.len() as i64,
@@ -182,7 +182,7 @@ pub trait FileExt: AsRawHandle {
 
         unsafe {
             CfGetPlaceholderInfo(
-                HANDLE(self.as_raw_handle() as isize),
+                HANDLE(self.as_raw_handle()),
                 CloudFilters::CF_PLACEHOLDER_INFO_STANDARD,
                 data.as_mut_ptr() as *mut _,
                 data.len() as u32,
@@ -207,7 +207,7 @@ pub trait FileExt: AsRawHandle {
         let mut info = MaybeUninit::<FILE_ATTRIBUTE_TAG_INFO>::zeroed();
         unsafe {
             GetFileInformationByHandleEx(
-                HANDLE(self.as_raw_handle() as isize),
+                HANDLE(self.as_raw_handle()),
                 FileSystem::FileAttributeTagInfo,
                 info.as_mut_ptr() as *mut _,
                 mem::size_of::<FILE_ATTRIBUTE_TAG_INFO>() as u32,
@@ -222,14 +222,7 @@ pub trait FileExt: AsRawHandle {
 
     /// Sets the pin state of the placeholder.
     fn set_pin_state(&self, state: PinState, options: PinOptions) -> core::Result<()> {
-        unsafe {
-            CfSetPinState(
-                HANDLE(self.as_raw_handle() as isize),
-                state.into(),
-                options.0,
-                None,
-            )
-        }
+        unsafe { CfSetPinState(HANDLE(self.as_raw_handle()), state.into(), options.0, None) }
     }
 
     /// Marks a placeholder as synced.
@@ -266,7 +259,7 @@ pub trait FileExt: AsRawHandle {
 
         unsafe {
             CfGetSyncRootInfoByHandle(
-                HANDLE(self.as_raw_handle() as isize),
+                HANDLE(self.as_raw_handle()),
                 CF_SYNC_ROOT_INFO_STANDARD,
                 data.as_mut_ptr() as *mut _,
                 data.len() as u32,
@@ -297,7 +290,7 @@ fn mark_sync_state(handle: RawHandle, sync: bool, usn: Usn) -> core::Result<Usn>
     let mut usn = usn as i64;
     unsafe {
         CfSetInSyncState(
-            HANDLE(handle as isize),
+            HANDLE(handle),
             if sync {
                 CloudFilters::CF_IN_SYNC_STATE_IN_SYNC
             } else {
@@ -319,7 +312,7 @@ fn dehydrate<T: RangeBounds<u64>>(
 ) -> core::Result<()> {
     unsafe {
         CfDehydratePlaceholder(
-            HANDLE(handle as isize),
+            HANDLE(handle),
             match range.start_bound() {
                 Bound::Included(x) => *x as i64,
                 Bound::Excluded(x) => x.saturating_add(1) as i64,
