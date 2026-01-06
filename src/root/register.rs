@@ -130,7 +130,7 @@ impl<'a> Registration<'a> {
     // TODO: this field is required
     // https://docs.microsoft.com/en-us/windows/win32/menurc/icon-resource
 
-    pub fn icon(mut self, mut path: U16String, index: u16) -> Self {
+    pub fn icon(mut self, mut path: U16String, index: i16) -> Self {
         path.push_str(format!(",{index}"));
         self.icon = path;
         self
